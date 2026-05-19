@@ -130,7 +130,7 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
     const timer = window.setInterval(() => {
       void loadSignals();
       if (startAfterAcceptRef.current && !startedRef.current) void checkAcceptedAndStart();
-    }, 450);
+    }, 1_500);
     return () => window.clearInterval(timer);
   }, [roomId]);
 
@@ -138,7 +138,7 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
     if (status === "ended" || status === "declined") return;
     const timer = window.setInterval(() => {
       void syncCallStatus();
-    }, 1500);
+    }, 8_000);
     return () => window.clearInterval(timer);
   }, [roomId, router, status]);
 

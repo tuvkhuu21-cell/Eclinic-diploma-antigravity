@@ -51,6 +51,7 @@ export function ChatBox() {
   const messagesRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const initialScrollDoneRef = useRef(false);
+  const latestMessageAtRef = useRef("");
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -95,8 +96,10 @@ export function ChatBox() {
 
   const refreshMessages = useCallback(async (roomId: string, options?: { clearOnError?: boolean }) => {
     try {
-      const response = await api.get(`/chat/rooms/${roomId}/messages`);
+      const params = latestMessageAtRef.current ? { since: latestMessageAtRef.current, limit: 40 } : { limit: 80 };
+      const response = await api.get(`/chat/rooms/${roomId}/messages`, { params });
       const rows = normalizeMessages(response.data.data as ChatMessage[]);
+      if (rows.at(-1)?.createdAt) latestMessageAtRef.current = rows.at(-1)?.createdAt || latestMessageAtRef.current;
       setMessages((current) => mergeMessages(current, rows));
     } catch {
       if (options?.clearOnError) setMessages([]);
@@ -109,12 +112,17 @@ export function ChatBox() {
       return;
     }
     initialScrollDoneRef.current = false;
+    latestMessageAtRef.current = "";
 
     let cancelled = false;
     async function loadMessages() {
       try {
-        const response = await api.get(`/chat/rooms/${activeRoomId}/messages`);
-        if (!cancelled) setMessages(normalizeMessages(response.data.data as ChatMessage[]));
+        const response = await api.get(`/chat/rooms/${activeRoomId}/messages`, { params: { limit: 80 } });
+        if (!cancelled) {
+          const rows = normalizeMessages(response.data.data as ChatMessage[]);
+          latestMessageAtRef.current = rows.at(-1)?.createdAt || "";
+          setMessages(rows);
+        }
       } catch {
         if (!cancelled) setMessages([]);
       }
@@ -122,6 +130,7 @@ export function ChatBox() {
 
     loadMessages();
     const channel = subscribeBroadcast<ChatMessage>(`chat-room-${activeRoomId}`, "new-message", (message) => {
+      if (message.createdAt && message.createdAt > latestMessageAtRef.current) latestMessageAtRef.current = message.createdAt;
       setMessages((current) => mergeMessages(current, [message]));
       if (message.senderId !== user?.id) {
         setUnreadRoomIds((current) => {
@@ -133,7 +142,7 @@ export function ChatBox() {
     });
     const timer = window.setInterval(() => {
       void refreshMessages(activeRoomId);
-    }, 2500);
+    }, 10_000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -193,6 +202,7 @@ export function ChatBox() {
     try {
       const response = await api.post("/chat/messages", { roomId: activeRoomId, content });
       const saved = response.data.data as ChatMessage;
+      if (saved.createdAt && saved.createdAt > latestMessageAtRef.current) latestMessageAtRef.current = saved.createdAt;
       setMessages((current) => mergeMessages(current.filter((message) => message.id !== tempId), [saved]));
       await broadcastRealtime(`chat-room-${activeRoomId}`, "new-message", saved);
       void refreshMessages(activeRoomId);
@@ -224,6 +234,7 @@ export function ChatBox() {
       }]));
       const response = await api.post("/chat/messages", { roomId: activeRoomId, content: payload });
       const saved = response.data.data as ChatMessage;
+      if (saved.createdAt && saved.createdAt > latestMessageAtRef.current) latestMessageAtRef.current = saved.createdAt;
       setMessages((current) => mergeMessages(current.filter((message) => message.id !== tempId), [saved]));
       setDraft("");
       await broadcastRealtime(`chat-room-${activeRoomId}`, "new-message", saved);

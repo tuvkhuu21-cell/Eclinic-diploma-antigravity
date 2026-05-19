@@ -39,7 +39,7 @@ export function ChatIconLink({ className, iconSize = 19 }: { className?: string;
     }
 
     void loadUnreadChatNotifications();
-    const refreshTimer = window.setInterval(loadUnreadChatNotifications, 2_000);
+    const refreshTimer = window.setInterval(loadUnreadChatNotifications, 25_000);
     const channel = subscribeBroadcast<NotificationRow>(`user-notifications-${user.id}`, "new-notification", (notification) => {
       if (!isChatNotification(notification)) return;
       setChatNotifications((current) => [notification, ...current.filter((item) => item.id !== notification.id)]);

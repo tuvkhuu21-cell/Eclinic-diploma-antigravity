@@ -12,7 +12,8 @@ export async function GET(request: NextRequest) {
     const user = getAuthUser(request);
     return ok(await chatService.rooms(user.userId));
   } catch (error) {
-    return fail(errorMessage(error), error instanceof ApiError ? error.statusCode : 500);
+    if (error instanceof ApiError) return fail(error.message, error.statusCode);
+    console.error("GET /api/chat/rooms failed", error);
+    return fail(errorMessage(error), 500);
   }
 }
-

@@ -53,7 +53,7 @@ export function NotificationBox({ variant = "list", buttonClassName }: { variant
     }
 
     loadNotifications();
-    const refreshTimer = window.setInterval(loadNotifications, 5_000);
+    const refreshTimer = window.setInterval(loadNotifications, 25_000);
     const channel = user?.id ? subscribeBroadcast<NotificationRow>(`user-notifications-${user.id}`, "new-notification", (notification) => {
       setNotifications((current) => [notification, ...current.filter((item) => item.id !== notification.id)]);
     }) : null;

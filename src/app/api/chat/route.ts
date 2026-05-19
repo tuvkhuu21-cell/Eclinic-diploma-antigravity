@@ -13,10 +13,16 @@ export async function GET(request: NextRequest) {
   try {
     const user = getAuthUser(request);
     const roomId = request.nextUrl.searchParams.get("roomId");
-    if (roomId) return ok(await chatService.messages(roomId));
+    if (roomId) {
+      const limit = Number(request.nextUrl.searchParams.get("limit") || 80);
+      const since = request.nextUrl.searchParams.get("since") || undefined;
+      return ok(await chatService.messages(user.userId, roomId, { limit, since }));
+    }
     return ok(await chatService.rooms(user.userId));
   } catch (error) {
-    return fail(errorMessage(error), error instanceof ApiError ? error.statusCode : 500);
+    if (error instanceof ApiError) return fail(error.message, error.statusCode);
+    console.error("GET /api/chat failed", error);
+    return fail(errorMessage(error), 500);
   }
 }
 
@@ -26,7 +32,8 @@ export async function POST(request: NextRequest) {
     const input = validateBody(sendMessageSchema, await request.json());
     return created(await chatService.send(user.userId, input));
   } catch (error) {
-    return fail(errorMessage(error), error instanceof ApiError ? error.statusCode : 500);
+    if (error instanceof ApiError) return fail(error.message, error.statusCode);
+    console.error("POST /api/chat failed", error);
+    return fail(errorMessage(error), 500);
   }
 }
-

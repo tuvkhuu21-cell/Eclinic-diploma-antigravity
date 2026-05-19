@@ -16,7 +16,9 @@ export async function GET(request: NextRequest) {
     if (status === "ringing") return ok(await videoService.incoming(user.userId));
     return ok([]);
   } catch (error) {
-    return fail(errorMessage(error), error instanceof ApiError ? error.statusCode : 500);
+    if (error instanceof ApiError) return fail(error.message, error.statusCode);
+    console.error("GET /api/video-calls failed", error);
+    return fail(errorMessage(error), 500);
   }
 }
 
@@ -26,7 +28,9 @@ export async function POST(request: NextRequest) {
     const input = validateBody(videoRequestSchema, await request.json());
     return created(await videoService.request(user.userId, input));
   } catch (error) {
-    return fail(errorMessage(error), error instanceof ApiError ? error.statusCode : 500);
+    if (error instanceof ApiError) return fail(error.message, error.statusCode);
+    console.error("POST /api/video-calls failed", error);
+    return fail(errorMessage(error), 500);
   }
 }
 
@@ -36,6 +40,8 @@ export async function PATCH(request: NextRequest) {
     const input = validateBody(videoStatusSchema, await request.json());
     return ok(await videoService.updateStatus(user.userId, input.roomId, input.status || "ended"));
   } catch (error) {
-    return fail(errorMessage(error), error instanceof ApiError ? error.statusCode : 500);
+    if (error instanceof ApiError) return fail(error.message, error.statusCode);
+    console.error("PATCH /api/video-calls failed", error);
+    return fail(errorMessage(error), 500);
   }
 }

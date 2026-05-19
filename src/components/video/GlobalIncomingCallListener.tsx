@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PhoneOff, Video, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { broadcastRealtime, removeRealtimeChannel, subscribeBroadcast } from "@/lib/supabase-realtime";
@@ -9,19 +9,12 @@ import { api } from "@/services/api";
 
 const RINGING_TIMEOUT_MS = 30_000;
 
-type RingtoneNode = {
-  oscillator: OscillatorNode;
-  gain: GainNode;
-  context: AudioContext;
-};
-
-const activeRingtones = new Set<RingtoneNode>();
-
 type IncomingVideoCall = {
   roomId: string;
   appointmentId?: string;
   callerId?: string;
   callerName?: string;
+  status?: string;
   patient?: { user?: { firstName?: string; lastName?: string } };
   doctor?: { user?: { firstName?: string; lastName?: string } };
 };
@@ -31,9 +24,7 @@ export function GlobalIncomingCallListener() {
   const pathname = usePathname();
   const user = useAuthStore((state) => state.user);
   const [incoming, setIncoming] = useState<IncomingVideoCall | null>(null);
-  const oscillatorRef = useRef<OscillatorNode | null>(null);
-  const gainRef = useRef<GainNode | null>(null);
-  const audioRef = useRef<AudioContext | null>(null);
+  const ringtoneRef = useRef<HTMLAudioElement | null>(null);
   const timeoutRef = useRef<number | null>(null);
   const ignoredRoomIdsRef = useRef<Set<string>>(new Set());
   const userId = user?.id ?? null;
@@ -42,18 +33,25 @@ export function GlobalIncomingCallListener() {
 
   const callerName = useMemo(() => incoming?.callerName || "MediConnect хэрэглэгч", [incoming?.callerName]);
 
+  const stopRingtone = useCallback(() => {
+    if (!ringtoneRef.current) return;
+    ringtoneRef.current.pause();
+    ringtoneRef.current.currentTime = 0;
+  }, []);
+
   useEffect(() => {
     if (!isVideoPage) return;
-    stopAllRingtones();
+    stopRingtone();
     setIncoming(null);
-  }, [isVideoPage]);
+  }, [isVideoPage, stopRingtone]);
 
   useEffect(() => {
     if (!enabled || !userId || isVideoPage) return;
     const channel = subscribeBroadcast<IncomingVideoCall>(`user-notifications-${userId}`, "incoming-video-call", (payload) => {
       if (payload.callerId && payload.callerId === userId) return;
       if (ignoredRoomIdsRef.current.has(payload.roomId)) return;
-      setIncoming(payload);
+      if (payload.status && payload.status !== "ringing") return;
+      setIncoming({ ...payload, status: "ringing" });
     });
     return () => removeRealtimeChannel(channel);
   }, [enabled, userId, isVideoPage]);
@@ -81,7 +79,7 @@ export function GlobalIncomingCallListener() {
     }
 
     void checkIncomingCall();
-    const timer = window.setInterval(checkIncomingCall, 2_000);
+    const timer = window.setInterval(checkIncomingCall, 8_000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -101,13 +99,22 @@ export function GlobalIncomingCallListener() {
   }, [incoming?.roomId]);
 
   useEffect(() => {
-    if (!incoming) {
+    if (incoming?.status !== "ringing") {
       stopRingtone();
       return;
     }
-    startRingtone();
+    if (!ringtoneRef.current) {
+      ringtoneRef.current = createRingtoneAudio();
+      ringtoneRef.current.loop = true;
+    }
+    ringtoneRef.current.play().catch(() => {});
     return () => stopRingtone();
-  }, [incoming?.roomId]);
+  }, [incoming?.status, incoming?.roomId, stopRingtone]);
+
+  useEffect(() => () => {
+    stopRingtone();
+    if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
+  }, [stopRingtone]);
 
   async function acceptCall() {
     if (!incoming) return;
@@ -151,36 +158,6 @@ export function GlobalIncomingCallListener() {
     stopRingtone();
   }
 
-  function startRingtone() {
-    try {
-      const AudioCtor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtor || oscillatorRef.current) return;
-      const context = audioRef.current || new AudioCtor();
-      audioRef.current = context;
-      if (context.state === "suspended") void context.resume().catch(() => null);
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.value = 880;
-      gain.gain.value = 0.04;
-      oscillator.connect(gain);
-      gain.connect(context.destination);
-      oscillator.start();
-      oscillatorRef.current = oscillator;
-      gainRef.current = gain;
-      activeRingtones.add({ oscillator, gain, context });
-    } catch {
-      // Browser may block audio before user interaction; popup remains visible.
-    }
-  }
-
-  function stopRingtone() {
-    stopAllRingtones();
-    oscillatorRef.current = null;
-    gainRef.current = null;
-    audioRef.current = null;
-  }
-
   if (!incoming) return null;
 
   return (
@@ -207,21 +184,36 @@ export function GlobalIncomingCallListener() {
   );
 }
 
-function stopAllRingtones() {
-  for (const node of Array.from(activeRingtones)) {
-    try {
-      node.gain.gain.value = 0;
-      node.oscillator.stop();
-    } catch {
-      // Already stopped.
-    }
-    try {
-      node.oscillator.disconnect();
-      node.gain.disconnect();
-    } catch {
-      // Already disconnected.
-    }
-    if (node.context.state !== "closed") void node.context.close().catch(() => null);
-    activeRingtones.delete(node);
+function createRingtoneAudio() {
+  const sampleRate = 8000;
+  const durationSeconds = 0.45;
+  const sampleCount = Math.floor(sampleRate * durationSeconds);
+  const buffer = new ArrayBuffer(44 + sampleCount * 2);
+  const view = new DataView(buffer);
+  writeAscii(view, 0, "RIFF");
+  view.setUint32(4, 36 + sampleCount * 2, true);
+  writeAscii(view, 8, "WAVE");
+  writeAscii(view, 12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeAscii(view, 36, "data");
+  view.setUint32(40, sampleCount * 2, true);
+  for (let index = 0; index < sampleCount; index += 1) {
+    const tone = Math.sin((2 * Math.PI * 880 * index) / sampleRate);
+    const envelope = index < sampleCount * 0.78 ? 1 : Math.max(0, (sampleCount - index) / (sampleCount * 0.22));
+    view.setInt16(44 + index * 2, tone * envelope * 5200, true);
+  }
+  const blob = new Blob([buffer], { type: "audio/wav" });
+  return new Audio(URL.createObjectURL(blob));
+}
+
+function writeAscii(view: DataView, offset: number, value: string) {
+  for (let index = 0; index < value.length; index += 1) {
+    view.setUint8(offset + index, value.charCodeAt(index));
   }
 }
