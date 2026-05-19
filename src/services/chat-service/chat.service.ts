@@ -27,25 +27,30 @@ export const chatService = {
       orderBy: { createdAt: "desc" },
       take: 50,
     });
-    return Promise.all(rooms.map(async (room) => {
-      const appointment = await prisma.appointment.findFirst({
-        where: {
-          patientId: room.patientId,
-          doctorId: room.doctorId,
-          type: "ONLINE",
-          status: { in: ["CONFIRMED", "COMPLETED"] },
-        },
-        select: {
-          id: true,
-          type: true,
-          scheduledAt: true,
-          durationMinutes: true,
-          status: true,
-          paymentStatus: true,
-          videoCall: { select: { roomId: true, status: true } },
-        },
-        orderBy: { scheduledAt: "desc" },
-      });
+    if (!rooms.length) return [];
+    const appointments = await prisma.appointment.findMany({
+      where: {
+        type: "ONLINE",
+        status: { in: ["CONFIRMED", "COMPLETED"] },
+        OR: rooms.map((room) => ({ patientId: room.patientId, doctorId: room.doctorId })),
+      },
+      select: {
+        id: true,
+        patientId: true,
+        doctorId: true,
+        type: true,
+        scheduledAt: true,
+        durationMinutes: true,
+        status: true,
+        paymentStatus: true,
+        videoCall: { select: { roomId: true, status: true } },
+      },
+      orderBy: { scheduledAt: "desc" },
+      take: 100,
+    });
+    const appointmentByPair = new Map(appointments.map((appointment) => [`${appointment.patientId}:${appointment.doctorId}`, appointment]));
+    return rooms.map((room) => {
+      const appointment = appointmentByPair.get(`${room.patientId}:${room.doctorId}`);
       return {
         ...room,
         appointment: appointment ? {
@@ -58,7 +63,7 @@ export const chatService = {
           videoCall: appointment.videoCall,
         } : null,
       };
-    }));
+    });
   },
   async messages(userId: string, roomId: string, options?: { limit?: number; since?: string }) {
     const room = await prisma.chatRoom.findFirst({
@@ -82,11 +87,14 @@ export const chatService = {
   async send(userId: string, data: { roomId: string; content: string }) {
     const room = await prisma.chatRoom.findUnique({
       where: { id: data.roomId },
-      include: { patient: true, doctor: true },
+      select: { id: true, patient: { select: { userId: true } }, doctor: { select: { userId: true } } },
     });
     if (!room) throw new ApiError(404, "Chat room not found");
     if (room.patient.userId !== userId && room.doctor.userId !== userId) throw new ApiError(403, "Chat room access denied");
-    const message = await prisma.message.create({ data: { roomId: data.roomId, senderId: userId, content: data.content } });
+    const message = await prisma.message.create({
+      data: { roomId: data.roomId, senderId: userId, content: data.content },
+      select: { id: true, roomId: true, senderId: true, content: true, createdAt: true },
+    });
     const recipientUserId = room?.patient.userId === userId ? room.doctor.userId : room?.patient.userId;
     if (recipientUserId) {
       const notification = await prisma.notification.create({

@@ -27,7 +27,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const messages = (store.get(roomId) || []).filter((message) => message.senderId !== user.userId && (!since || message.createdAt > since));
     return ok(messages);
   } catch (error) {
-    return fail(errorMessage(error), error instanceof ApiError ? error.statusCode : 500);
+    if (error instanceof ApiError) return fail(error.message, error.statusCode);
+    console.error("GET /api/video-calls/[roomId]/signal failed", error);
+    return fail(errorMessage(error), 500);
   }
 }
 
@@ -50,6 +52,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     store.set(roomId, rows.slice(-80));
     return ok(message);
   } catch (error) {
-    return fail(errorMessage(error), error instanceof ApiError ? error.statusCode : 500);
+    if (error instanceof ApiError) return fail(error.message, error.statusCode);
+    console.error("POST /api/video-calls/[roomId]/signal failed", error);
+    return fail(errorMessage(error), 500);
   }
 }

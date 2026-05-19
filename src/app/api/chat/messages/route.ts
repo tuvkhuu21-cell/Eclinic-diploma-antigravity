@@ -15,7 +15,8 @@ export async function POST(request: NextRequest) {
     const input = validateBody(sendMessageSchema, await request.json());
     return created(await chatService.send(user.userId, input));
   } catch (error) {
-    return fail(errorMessage(error), error instanceof ApiError ? error.statusCode : 500);
+    if (error instanceof ApiError) return fail(error.message, error.statusCode);
+    console.error("POST /api/chat/messages failed", error);
+    return fail(errorMessage(error), 500);
   }
 }
-

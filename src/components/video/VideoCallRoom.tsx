@@ -130,7 +130,7 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
     const timer = window.setInterval(() => {
       void loadSignals();
       if (startAfterAcceptRef.current && !startedRef.current) void checkAcceptedAndStart();
-    }, 1_500);
+    }, 2_500);
     return () => window.clearInterval(timer);
   }, [roomId]);
 
@@ -204,7 +204,7 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
     const chatRoomId = meta.chatRoom.id;
     async function loadMessages() {
       try {
-        const response = await api.get(`/chat/rooms/${chatRoomId}/messages`);
+        const response = await api.get(`/chat/rooms/${chatRoomId}/messages`, { params: { limit: 80 } });
         if (!cancelled) {
           initialChatLoadedRef.current = false;
           setMessages(sortMessages(response.data.data as VideoChatMessage[]));

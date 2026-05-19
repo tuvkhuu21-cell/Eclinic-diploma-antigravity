@@ -99,6 +99,25 @@ export function GlobalIncomingCallListener() {
   }, [incoming?.roomId]);
 
   useEffect(() => {
+    if (!incoming?.roomId) return;
+    const clearIncoming = (roomId?: string) => {
+      if (roomId && roomId !== incoming.roomId) return;
+      ignoredRoomIdsRef.current.add(incoming.roomId);
+      stopRingtone();
+      setIncoming(null);
+      if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
+    };
+    const accepted = subscribeBroadcast<{ roomId?: string }>(`video-call-${incoming.roomId}`, "call-accepted", (payload) => clearIncoming(payload.roomId));
+    const declined = subscribeBroadcast<{ roomId?: string }>(`video-call-${incoming.roomId}`, "call-declined", (payload) => clearIncoming(payload.roomId));
+    const ended = subscribeBroadcast<{ roomId?: string }>(`video-call-${incoming.roomId}`, "call-ended", (payload) => clearIncoming(payload.roomId));
+    return () => {
+      removeRealtimeChannel(accepted);
+      removeRealtimeChannel(declined);
+      removeRealtimeChannel(ended);
+    };
+  }, [incoming?.roomId, stopRingtone]);
+
+  useEffect(() => {
     if (incoming?.status !== "ringing") {
       stopRingtone();
       return;

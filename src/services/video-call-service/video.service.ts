@@ -7,25 +7,23 @@ const RINGING_TIMEOUT_MS = 30_000;
 export const videoService = {
   async incoming(userId: string) {
     const ringingCutoff = new Date(Date.now() - RINGING_TIMEOUT_MS);
-    await prisma.videoCall.updateMany({
-      where: {
-        status: "ringing",
-        OR: [
-          { startedAt: null },
-          { startedAt: { lt: ringingCutoff } },
-        ],
-      },
-      data: { status: "ended", endedAt: new Date() },
-    });
     const calls = await prisma.videoCall.findMany({
       where: {
         status: "ringing",
         startedAt: { gte: ringingCutoff },
         OR: [{ patient: { userId } }, { doctor: { userId } }],
       },
-      include: {
-        patient: { include: { user: true } },
-        doctor: { include: { user: true } },
+      select: {
+        id: true,
+        roomId: true,
+        appointmentId: true,
+        patientId: true,
+        doctorId: true,
+        status: true,
+        startedAt: true,
+        createdAt: true,
+        patient: { select: { userId: true, user: { select: { id: true, firstName: true, lastName: true } } } },
+        doctor: { select: { userId: true, user: { select: { id: true, firstName: true, lastName: true } } } },
       },
       orderBy: { createdAt: "desc" },
       take: 3,
@@ -35,10 +33,19 @@ export const videoService = {
   async getByRoom(userId: string, roomId: string) {
     const call = await prisma.videoCall.findUnique({
       where: { roomId },
-      include: {
-        appointment: true,
-        patient: { include: { user: true } },
-        doctor: { include: { user: true } },
+      select: {
+        id: true,
+        appointmentId: true,
+        patientId: true,
+        doctorId: true,
+        roomId: true,
+        status: true,
+        startedAt: true,
+        endedAt: true,
+        createdAt: true,
+        appointment: { select: { id: true, scheduledAt: true, type: true, status: true, paymentStatus: true, durationMinutes: true } },
+        patient: { select: { userId: true, user: { select: { id: true, firstName: true, lastName: true } } } },
+        doctor: { select: { userId: true, specialty: true, user: { select: { id: true, firstName: true, lastName: true } } } },
       },
     });
     if (!call) throw new ApiError(404, "Video call not found");
@@ -47,10 +54,20 @@ export const videoService = {
     return { ...call, chatRoom };
   },
   async request(userId: string, data: { doctorId: string; appointmentId?: string }) {
-    const user = await prisma.user.findUnique({ where: { id: userId }, include: { patientProfile: true, doctorProfile: true } });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        patientProfile: { select: { id: true } },
+        doctorProfile: { select: { id: true } },
+      },
+    });
     if (!user) throw new ApiError(401, "Authentication required");
 
-    const appointment = data.appointmentId ? await prisma.appointment.findUnique({ where: { id: data.appointmentId } }) : null;
+    const appointment = data.appointmentId ? await prisma.appointment.findUnique({
+      where: { id: data.appointmentId },
+      select: { id: true, patientId: true, doctorId: true, type: true },
+    }) : null;
     if (appointment && appointment.type !== "ONLINE") throw new ApiError(400, "Video call is available only for online appointments");
     const patientId = appointment?.patientId || user.patientProfile?.id;
     const doctorId = appointment?.doctorId || data.doctorId || user.doctorProfile?.id;

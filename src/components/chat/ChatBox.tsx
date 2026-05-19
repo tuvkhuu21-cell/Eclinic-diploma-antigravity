@@ -205,7 +205,6 @@ export function ChatBox() {
       if (saved.createdAt && saved.createdAt > latestMessageAtRef.current) latestMessageAtRef.current = saved.createdAt;
       setMessages((current) => mergeMessages(current.filter((message) => message.id !== tempId), [saved]));
       await broadcastRealtime(`chat-room-${activeRoomId}`, "new-message", saved);
-      void refreshMessages(activeRoomId);
     } catch {
       setMessages((current) => current.map((message) => message.id === tempId ? { ...message, status: "failed" } : message));
     } finally {
@@ -238,7 +237,6 @@ export function ChatBox() {
       setMessages((current) => mergeMessages(current.filter((message) => message.id !== tempId), [saved]));
       setDraft("");
       await broadcastRealtime(`chat-room-${activeRoomId}`, "new-message", saved);
-      void refreshMessages(activeRoomId);
     } catch {
       setMessages((current) => current.map((message) => message.status === "sending" ? { ...message, status: "failed" } : message));
     } finally {
