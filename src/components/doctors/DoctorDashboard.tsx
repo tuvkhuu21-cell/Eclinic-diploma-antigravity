@@ -180,7 +180,6 @@ export function DoctorDashboard() {
     if (activeRole === "DOCTOR") await api.patch("/doctors/me", { online: false }).catch(() => null);
     logout();
     router.replace("/");
-    router.refresh();
   }
 
   if (!hasHydrated || !token || !isAllowed) {

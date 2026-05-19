@@ -80,12 +80,14 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
   const shouldStickToBottomRef = useRef(true);
   const initialChatLoadedRef = useRef(false);
   const latestVideoChatAtRef = useRef("");
+  const isEndingRef = useRef(false);
   const [meta, setMeta] = useState<VideoMeta | null>(null);
   const [messages, setMessages] = useState<VideoChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [micOn, setMicOn] = useState(true);
   const [cameraOn, setCameraOn] = useState(true);
   const [chatOpen, setChatOpen] = useState(true);
+  const [sending, setSending] = useState(false);
   const [status, setStatus] = useState<"idle" | "waiting" | "ringing" | "active" | "declined" | "ended">("idle");
   const [notice, setNotice] = useState("Камер, микрофоноо зөвшөөрөөд дуудлага эхлүүлнэ үү.");
   const [permissionError, setPermissionError] = useState("");
@@ -586,18 +588,23 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
   }
 
   async function endCall() {
+    if (isEndingRef.current) return;
+    isEndingRef.current = true;
     clearRingingTimeout();
-    const endedAt = new Date();
-    const response = await api.patch("/video-calls", { roomId, status: "ended" }).catch(() => null);
-    const updated = response?.data?.data as VideoMeta | undefined;
-    const startedAt = updated?.startedAt || meta?.startedAt;
-    await recordCallEndedMessage({
-      endedAt,
-      durationSeconds: startedAt ? Math.max(1, Math.round((endedAt.getTime() - new Date(startedAt).getTime()) / 1000)) : undefined,
-    });
-    void broadcastRealtime(`video-call-${roomId}`, "call-ended", { roomId, userId: user?.id });
+    // Stop media & close peer immediately
     cleanup(true);
+    // Navigate immediately — do NOT wait for backend
     router.replace("/chat");
+    // Fire backend cleanup in background
+    const endedAt = new Date();
+    const startedAt = meta?.startedAt;
+    api.patch("/video-calls", { roomId, status: "ended" }).catch(() => null);
+    broadcastRealtime(`video-call-${roomId}`, "call-ended", { roomId, userId: user?.id }).catch(() => null);
+    // Record ended message in background
+    if (meta?.chatRoom?.id) {
+      const durationSeconds = startedAt ? Math.max(1, Math.round((endedAt.getTime() - new Date(startedAt).getTime()) / 1000)) : undefined;
+      recordCallEndedMessage({ endedAt, durationSeconds }).catch(() => null);
+    }
   }
 
   async function recordCallEndedMessage({ endedAt, durationSeconds }: { endedAt: Date; durationSeconds?: number }) {
@@ -622,7 +629,8 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
 
   async function sendMessage() {
     const content = draft.trim();
-    if (!content || !meta?.chatRoom?.id) return;
+    if (!content || !meta?.chatRoom?.id || sending) return;
+    setSending(true);
     const tempId = `temp-${crypto.randomUUID()}`;
     const optimistic: VideoChatMessage = { id: tempId, content, senderId: user?.id || "me", createdAt: new Date().toISOString(), status: "sending" };
     setDraft("");
@@ -636,6 +644,8 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
       void broadcastRealtime(`chat-room-${meta.chatRoom.id}`, "new-message", saved);
     } catch {
       setMessages((current) => current.map((item) => item.id === tempId ? { ...item, status: "failed" } : item));
+    } finally {
+      setSending(false);
     }
   }
 

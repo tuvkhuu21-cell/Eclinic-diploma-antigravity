@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarClock, Download, Eye, FileText, FileX2, MessageCircle, Video, X } from "lucide-react";
+import { CalendarClock, Download, Eye, FileText, FileX2, MessageCircle, Star, Stethoscope, Video, X } from "lucide-react";
 import { PatientSidebar, type PatientSection } from "./PatientSidebar";
 import { PatientProfileForm } from "./PatientProfileForm";
 import { PatientHealthForm } from "./PatientHealthForm";
@@ -17,6 +17,8 @@ export function PatientDashboardContent() {
   const router = useRouter();
   const { hasHydrated, token, role, user } = useAuthStore();
   const [section, setSection] = useState<PatientSection>("labs");
+  const [appointments, setAppointments] = useState<PatientAppointment[]>([]);
+  const [appointmentsLoading, setAppointmentsLoading] = useState(true);
 
   useEffect(() => {
     if (!hasHydrated) return;
@@ -37,6 +39,16 @@ export function PatientDashboardContent() {
     if (requested === "orders") setSection("orders");
   }, []);
 
+  // Single shared fetch for all appointment-dependent sections
+  useEffect(() => {
+    let cancelled = false;
+    api.get("/appointments/my")
+      .then((response) => { if (!cancelled) setAppointments(response.data.data as PatientAppointment[]); })
+      .catch(() => { if (!cancelled) setAppointments([]); })
+      .finally(() => { if (!cancelled) setAppointmentsLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
   if (!hasHydrated) return <section className="min-h-screen bg-slate-50" />;
   if (user?.role === "DOCTOR" || role === "DOCTOR") return <section className="min-h-screen bg-slate-50" />;
 
@@ -50,9 +62,9 @@ export function PatientDashboardContent() {
             {section === "health" && <PatientHealthForm />}
             {section === "lifestyle" && <PatientLifestyleForm />}
             {section === "labs" && <LabResultsSection />}
-            {section === "doctors" && <MyDoctorsSection />}
-            {section === "appointments" && <AppointmentHistorySection />}
-            {section === "orders" && <OrderHistorySection />}
+            {section === "doctors" && <MyDoctorsSection appointments={appointments} loading={appointmentsLoading} />}
+            {section === "appointments" && <AppointmentHistorySection appointments={appointments} loading={appointmentsLoading} />}
+            {section === "orders" && <OrderHistorySection appointments={appointments} loading={appointmentsLoading} />}
           </main>
         </div>
       </div>
@@ -150,24 +162,16 @@ type PatientAppointment = {
   doctor: {
     id: string;
     specialty: string;
-    hospital?: { name: string } | null;
+    hospital?: { name: string; phone?: string; address?: string } | null;
     chatRooms?: Array<{ id: string }>;
-    user: { id?: string; firstName: string; lastName?: string };
+    user: { id?: string; firstName: string; lastName?: string; email?: string; phone?: string };
   };
   videoCall?: { roomId: string; status?: string } | null;
 };
 
-function MyDoctorsSection() {
+function MyDoctorsSection({ appointments, loading }: { appointments: PatientAppointment[]; loading: boolean }) {
   const user = useAuthStore((state) => state.user);
-  const [appointments, setAppointments] = useState<PatientAppointment[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api.get("/appointments/my")
-      .then((response) => setAppointments(response.data.data as PatientAppointment[]))
-      .catch(() => setAppointments([]))
-      .finally(() => setLoading(false));
-  }, []);
+  const [selectedDoctor, setSelectedDoctor] = useState<PatientAppointment | null>(null);
 
   const doctors = useMemo(() => {
     const map = new Map<string, PatientAppointment>();
@@ -189,7 +193,7 @@ function MyDoctorsSection() {
           const chatRoomId = appointment.doctor.chatRooms?.[0]?.id;
           const isHospitalVisit = appointment.type === "HOSPITAL_VISIT";
           return (
-            <article key={`${appointment.id}-${doctorName}`} className="rounded-2xl border border-sky-100 bg-white p-5 shadow-sm">
+            <article key={`${appointment.id}-${doctorName}`} className="cursor-pointer rounded-2xl border border-sky-100 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-medical hover:shadow-soft" onClick={() => setSelectedDoctor(appointment)}>
               <div className="flex gap-4">
                 <div className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-cyanSoft text-lg font-extrabold text-medical">{doctorName.slice(0, 2)}</div>
                 <div className="min-w-0 flex-1">
@@ -200,7 +204,7 @@ function MyDoctorsSection() {
                   {isHospitalVisit && <span className="mt-2 inline-flex rounded-full bg-cyanSoft px-3 py-1 text-xs font-bold text-medical">Биечлэн</span>}
                 </div>
               </div>
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-4 flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
                 {!isHospitalVisit && chatRoomId ? (
                   <Link href={`/chat?roomId=${chatRoomId}`} className="inline-flex items-center gap-2 rounded-full bg-medical px-4 py-2 text-sm font-bold text-white transition hover:bg-sky-600">
                     <MessageCircle size={16} />
@@ -220,21 +224,75 @@ function MyDoctorsSection() {
         })}
         {doctors.length === 0 && <EmptyState text="Төлбөр төлөгдсөн цагийн эмч одоогоор алга." />}
       </div>
+      <DoctorInfoModal appointment={selectedDoctor} onClose={() => setSelectedDoctor(null)} />
     </PanelShell>
   );
 }
 
-function AppointmentHistorySection() {
-  const [appointments, setAppointments] = useState<PatientAppointment[]>([]);
-  const [loading, setLoading] = useState(true);
-
+function DoctorInfoModal({ appointment, onClose }: { appointment: PatientAppointment | null; onClose: () => void }) {
   useEffect(() => {
-    api.get("/appointments/my")
-      .then((response) => setAppointments(response.data.data as PatientAppointment[]))
-      .catch(() => setAppointments([]))
-      .finally(() => setLoading(false));
-  }, []);
+    if (!appointment) return;
+    const original = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = original;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [appointment, onClose]);
 
+  if (!appointment) return null;
+  const doctor = appointment.doctor;
+  const name = formatDoctorName(appointment);
+
+  return (
+    <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-900/45 px-4 py-6 backdrop-blur-sm" onMouseDown={onClose}>
+      <div className="max-h-[calc(100vh-3rem)] w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-[0_24px_80px_rgba(14,116,144,0.25)]" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="relative bg-gradient-to-br from-sky-500 via-medical to-cyan-500 px-6 pb-8 pt-5 text-white">
+          <button type="button" className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full bg-white/15 transition hover:bg-white/25" onClick={onClose} aria-label="Close doctor info"><X size={18} /></button>
+          <div className="mt-10 flex items-end gap-5">
+            <div className="mb-[-42px] grid h-24 w-24 shrink-0 place-items-center rounded-full border-4 border-white bg-cyanSoft text-2xl font-extrabold text-medical shadow-soft">{name.slice(0, 2)}</div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-2xl font-extrabold">{name}</h2>
+              <p className="mt-1 text-sm font-semibold text-cyan-50">{doctor.specialty} · {doctor.hospital?.name || "Эмнэлэг сонгоогүй"}</p>
+            </div>
+          </div>
+        </div>
+        <div className="max-h-[60vh] overflow-y-auto p-6 pt-14" style={{ scrollbarWidth: "thin", scrollbarColor: "#cbd5e1 transparent" }}>
+          <div className="grid gap-4 md:grid-cols-2">
+            <DoctorInfoRow icon={<Stethoscope size={18} />} label="Мэргэшил" value={doctor.specialty} />
+            <DoctorInfoRow icon={<Star size={18} />} label="Эмнэлэг" value={doctor.hospital?.name} />
+            <DoctorInfoRow icon={<MessageCircle size={18} />} label="Утас" value={doctor.hospital?.phone} />
+            <DoctorInfoRow icon={<CalendarClock size={18} />} label="Имэйл" value={doctor.user.email} />
+            <DoctorInfoRow icon={<Video size={18} />} label="Үнэ" value={appointment.price ? `${formatCurrency(appointment.price)}₮` : "30,000₮"} />
+            <DoctorInfoRow icon={<CalendarClock size={18} />} label="Сүүлийн цаг" value={formatDateTime(appointment.scheduledAt)} />
+          </div>
+          <div className="mt-5 rounded-2xl border border-sky-100 bg-cyanSoft p-4">
+            <p className="text-xs font-bold text-medical">Цаг захиалгын мэдээлэл</p>
+            <p className="mt-2 text-sm font-semibold text-slate-600">{formatAppointmentType(appointment.type)} · {formatPaymentStatus(appointment.paymentStatus, appointment.status)}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DoctorInfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value?: string | null }) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-sky-100 bg-white p-3 shadow-sm">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-cyanSoft text-medical">{icon}</span>
+      <div>
+        <p className="text-xs font-bold text-slate-400">{label}</p>
+        <p className="mt-1 text-sm font-semibold text-navy">{value || "Бүртгээгүй"}</p>
+      </div>
+    </div>
+  );
+}
+
+function AppointmentHistorySection({ appointments, loading }: { appointments: PatientAppointment[]; loading: boolean }) {
   const rows = appointments.filter((appointment) => appointment.status || appointment.paymentStatus);
 
   if (loading) return <PanelShell title="Цаг захиалга"><p className="text-sm font-semibold text-slate-500">Цаг захиалгууд ачаалж байна...</p></PanelShell>;
@@ -283,17 +341,7 @@ function AppointmentHistorySection() {
   );
 }
 
-function OrderHistorySection() {
-  const [appointments, setAppointments] = useState<PatientAppointment[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api.get("/appointments/my")
-      .then((response) => setAppointments(response.data.data as PatientAppointment[]))
-      .catch(() => setAppointments([]))
-      .finally(() => setLoading(false));
-  }, []);
-
+function OrderHistorySection({ appointments, loading }: { appointments: PatientAppointment[]; loading: boolean }) {
   const rows = appointments
     .filter((appointment) => appointment.paymentStatus || appointment.status)
     .sort((left, right) => new Date(right.scheduledAt).getTime() - new Date(left.scheduledAt).getTime());

@@ -97,7 +97,7 @@ export function ChatBox() {
 
   const refreshMessages = useCallback(async (roomId: string, options?: { clearOnError?: boolean }) => {
     try {
-      const params = latestMessageAtRef.current ? { since: latestMessageAtRef.current, limit: 40 } : { limit: 80 };
+      const params = latestMessageAtRef.current ? { since: latestMessageAtRef.current, limit: 50 } : { limit: 50 };
       const response = await api.get(`/chat/rooms/${roomId}/messages`, { params });
       const rows = normalizeMessages(response.data.data as ChatMessage[]);
       if (rows.at(-1)?.createdAt) latestMessageAtRef.current = rows.at(-1)?.createdAt || latestMessageAtRef.current;
@@ -118,7 +118,7 @@ export function ChatBox() {
     let cancelled = false;
     async function loadMessages() {
       try {
-        const response = await api.get(`/chat/rooms/${activeRoomId}/messages`, { params: { limit: 80 } });
+        const response = await api.get(`/chat/rooms/${activeRoomId}/messages`, { params: { limit: 50 } });
         if (!cancelled) {
           const rows = normalizeMessages(response.data.data as ChatMessage[]);
           latestMessageAtRef.current = rows.at(-1)?.createdAt || "";

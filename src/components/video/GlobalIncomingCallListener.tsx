@@ -8,6 +8,7 @@ import { useAuthStore } from "@/store/auth.store";
 import { api } from "@/services/api";
 
 const RINGING_TIMEOUT_MS = 30_000;
+const POLLING_INTERVAL_MS = 5_000;
 
 type IncomingVideoCall = {
   roomId: string;
@@ -27,6 +28,7 @@ export function GlobalIncomingCallListener() {
   const ringtoneRef = useRef<HTMLAudioElement | null>(null);
   const timeoutRef = useRef<number | null>(null);
   const ignoredRoomIdsRef = useRef<Set<string>>(new Set());
+  const acceptingRef = useRef(false);
   const userId = user?.id ?? null;
   const enabled = Boolean(userId);
   const realtimeEnabled = isSupabaseRealtimeEnabled();
@@ -80,7 +82,7 @@ export function GlobalIncomingCallListener() {
     }
 
     void checkIncomingCall();
-    const timer = window.setInterval(checkIncomingCall, 20_000);
+    const timer = window.setInterval(checkIncomingCall, POLLING_INTERVAL_MS);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -137,15 +139,17 @@ export function GlobalIncomingCallListener() {
   }, [stopRingtone]);
 
   async function acceptCall() {
-    if (!incoming) return;
+    if (!incoming || acceptingRef.current) return;
+    acceptingRef.current = true;
     const roomId = incoming.roomId;
     ignoredRoomIdsRef.current.add(roomId);
     stopRingtone();
     if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
     setIncoming(null);
-    await api.patch("/video-calls", { roomId, status: "active" }).catch(() => null);
-    void broadcastRealtime(`video-call-${roomId}`, "call-accepted", { roomId, userId });
+    // Navigate immediately — do NOT await the PATCH
     router.push(`/video-call/${roomId}?accept=1`);
+    api.patch("/video-calls", { roomId, status: "active" }).catch(() => null);
+    broadcastRealtime(`video-call-${roomId}`, "call-accepted", { roomId, userId }).catch(() => null);
   }
 
   async function declineCall() {
@@ -192,7 +196,7 @@ export function GlobalIncomingCallListener() {
         <h2 className="mt-4 text-xl font-extrabold text-navy">Видео дуудлага ирлээ</h2>
         <p className="mt-2 text-sm font-semibold text-slate-600">{callerName}</p>
         <div className="mt-5 flex justify-center gap-3">
-          <button type="button" className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-3 text-sm font-bold text-white hover:bg-emerald-700" onClick={acceptCall}>
+          <button type="button" className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-3 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50" disabled={acceptingRef.current} onClick={acceptCall}>
             <Video size={16} /> Accept
           </button>
           <button type="button" className="inline-flex items-center gap-2 rounded-full bg-rose-600 px-5 py-3 text-sm font-bold text-white hover:bg-rose-700" onClick={declineCall}>

@@ -71,7 +71,7 @@ export const chatService = {
       select: { id: true },
     });
     if (!room) throw new ApiError(404, "Chat room not found");
-    const limit = Math.min(Math.max(options?.limit || 80, 1), 100);
+    const limit = Math.min(Math.max(options?.limit || 50, 1), 100);
     const sinceDate = options?.since ? new Date(options.since) : null;
     const rows = await prisma.message.findMany({
       where: {
@@ -95,9 +95,10 @@ export const chatService = {
       data: { roomId: data.roomId, senderId: userId, content: data.content },
       select: { id: true, roomId: true, senderId: true, content: true, createdAt: true },
     });
-    const recipientUserId = room?.patient.userId === userId ? room.doctor.userId : room?.patient.userId;
+    // Fire notification in background — do NOT await
+    const recipientUserId = room.patient.userId === userId ? room.doctor.userId : room.patient.userId;
     if (recipientUserId) {
-      void createChatNotification(recipientUserId);
+      createChatNotification(recipientUserId).catch(() => null);
     }
     return message;
   },
@@ -114,8 +115,8 @@ async function createChatNotification(recipientUserId: string) {
       },
       select: { id: true, title: true, body: true, type: true, readAt: true, createdAt: true },
     });
-    void broadcastRealtimeServer(`user-notifications-${recipientUserId}`, "new-notification", notification).catch(() => null);
-  } catch (error) {
-    console.error("create chat notification failed", error);
+    broadcastRealtimeServer(`user-notifications-${recipientUserId}`, "new-notification", notification).catch(() => null);
+  } catch {
+    // Notification should never block or crash the chat send flow.
   }
 }
