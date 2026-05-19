@@ -10,9 +10,10 @@ function getRuntimeDatabaseUrl() {
   try {
     const parsed = new URL(databaseUrl);
     if (parsed.hostname.includes("pooler.supabase.com")) {
-      if (!parsed.searchParams.has("pgbouncer")) parsed.searchParams.set("pgbouncer", "true");
-      const currentLimit = Number(parsed.searchParams.get("connection_limit") || "0");
-      if (!currentLimit || currentLimit < 3) parsed.searchParams.set("connection_limit", "3");
+      parsed.port = "6543";
+      parsed.searchParams.set("pgbouncer", "true");
+      parsed.searchParams.set("connection_limit", "1");
+      if (!parsed.searchParams.has("pool_timeout")) parsed.searchParams.set("pool_timeout", "20");
     }
     return parsed.toString();
   } catch {
