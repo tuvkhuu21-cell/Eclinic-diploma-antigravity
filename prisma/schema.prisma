@@ -48,6 +48,8 @@ model User {
   sentMessages    Message[]        @relation("SentMessages")
   notifications   Notification[]
   aiConversation  AiConversation?
+
+  @@index([role])
 }
 
 model PatientProfile {
@@ -111,6 +113,10 @@ model DoctorProfile {
   consultations Consultation[]
   chatRooms     ChatRoom[]
   videoCalls    VideoCall[]
+
+  @@index([hospitalId])
+  @@index([specialty])
+  @@index([online])
 }
 
 model Hospital {
@@ -137,6 +143,8 @@ model Department {
   description String?
   hospital    Hospital        @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   doctors     DoctorProfile[] @relation("DepartmentDoctors")
+
+  @@index([hospitalId])
 }
 
 model Appointment {
@@ -156,6 +164,12 @@ model Appointment {
   doctor      DoctorProfile     @relation(fields: [doctorId], references: [id], onDelete: Cascade)
   hospital    Hospital?         @relation(fields: [hospitalId], references: [id])
   videoCall   VideoCall?
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([patientId, doctorId])
 }
 
 model Consultation {
@@ -168,6 +182,9 @@ model Consultation {
   createdAt   DateTime           @default(now())
   patient     PatientProfile     @relation(fields: [patientId], references: [id], onDelete: Cascade)
   doctor      DoctorProfile?     @relation(fields: [doctorId], references: [id])
+
+  @@index([patientId])
+  @@index([doctorId])
 }
 
 model LabResult {
@@ -179,6 +196,8 @@ model LabResult {
   summary     String?
   issuedAt    DateTime       @default(now())
   patient     PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
 }
 
 model ChatRoom {
@@ -189,6 +208,10 @@ model ChatRoom {
   patient     PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
   doctor      DoctorProfile  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
   messages    Message[]
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([patientId, doctorId])
 }
 
 model Message {
@@ -199,6 +222,10 @@ model Message {
   createdAt DateTime @default(now())
   room      ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
   sender    User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([roomId])
+  @@index([roomId, createdAt])
+  @@index([senderId])
 }
 
 model Notification {
@@ -210,6 +237,9 @@ model Notification {
   readAt    DateTime?
   createdAt DateTime  @default(now())
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, readAt])
 }
 
 model VideoCall {
@@ -225,6 +255,11 @@ model VideoCall {
   appointment   Appointment?    @relation(fields: [appointmentId], references: [id])
   patient       PatientProfile  @relation(fields: [patientId], references: [id], onDelete: Cascade)
   doctor        DoctorProfile   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([status])
+  @@index([doctorId, status])
 }
 
 model AiConversation {
@@ -244,4 +279,6 @@ model AiMessage {
   toolName       String?
   createdAt      DateTime       @default(now())
   conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
 }
