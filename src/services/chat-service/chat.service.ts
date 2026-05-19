@@ -95,10 +95,13 @@ export const chatService = {
       data: { roomId: data.roomId, senderId: userId, content: data.content },
       select: { id: true, roomId: true, senderId: true, content: true, createdAt: true },
     });
-    // Fire notification in background — do NOT await
+    // Fire notification + broadcast completely in background using setTimeout
+    // This ensures the HTTP response is sent BEFORE any notification work starts
     const recipientUserId = room.patient.userId === userId ? room.doctor.userId : room.patient.userId;
     if (recipientUserId) {
-      createChatNotification(recipientUserId).catch(() => null);
+      setTimeout(() => {
+        createChatNotification(recipientUserId).catch(() => null);
+      }, 0);
     }
     return message;
   },

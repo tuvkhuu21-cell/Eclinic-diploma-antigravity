@@ -18,7 +18,7 @@ export function MobileNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-5 border-t bg-white px-2 py-2 text-[11px] font-semibold text-slate-600 md:hidden">
-      {items.map(({ href, icon: Icon, label }) => <Link key={href} href={href} prefetch={href === "/chat" ? false : undefined} className="flex flex-col items-center gap-1"><Icon size={18} />{label}</Link>)}
+      {items.map(({ href, icon: Icon, label }) => <Link key={href} href={href} prefetch={false} className="flex flex-col items-center gap-1"><Icon size={18} />{label}</Link>)}
     </nav>
   );
 }

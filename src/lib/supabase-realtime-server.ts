@@ -1,5 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+let serverClient: SupabaseClient | null = null;
 let missingEnvLogged = false;
 const missingEnvMessage = "Supabase environment variables are missing";
 
@@ -25,25 +26,33 @@ function logMissingSupabaseEnv() {
   if (process.env.NODE_ENV !== "production") console.warn(missingEnvMessage);
 }
 
+function getServerClient() {
+  const { url, serviceKey } = getServerSupabaseEnv();
+  if (!url || !serviceKey) return null;
+  if (!serverClient) {
+    serverClient = createClient(
+      url,
+      serviceKey,
+      { auth: { persistSession: false }, realtime: { params: { eventsPerSecond: 20 } } },
+    );
+  }
+  return serverClient;
+}
+
 export function isSupabaseRealtimeServerEnabled() {
   const { url, serviceKey } = getServerSupabaseEnv();
   return Boolean(url && serviceKey);
 }
 
 export async function broadcastRealtimeServer(channelName: string, event: string, payload: unknown) {
-  const { url, serviceKey } = getServerSupabaseEnv();
-  if (!url || !serviceKey) {
+  const client = getServerClient();
+  if (!client) {
     logMissingSupabaseEnv();
     return;
   }
-  const client = createClient(
-    url,
-    serviceKey,
-    { auth: { persistSession: false }, realtime: { params: { eventsPerSecond: 20 } } },
-  );
   const channel = client.channel(channelName, { config: { broadcast: { self: false } } });
   await new Promise<void>((resolve) => {
-    const timeout = setTimeout(resolve, 800);
+    const timeout = setTimeout(resolve, 400);
     void channel.subscribe((status) => {
       if (status !== "SUBSCRIBED") return;
       clearTimeout(timeout);

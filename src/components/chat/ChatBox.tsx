@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Edit3, MoreHorizontal, Paperclip, Search, Send, Smile, Video } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -53,6 +54,7 @@ export function ChatBox() {
   const initialScrollDoneRef = useRef(false);
   const latestMessageAtRef = useRef("");
   const realtimeEnabled = isSupabaseRealtimeEnabled();
+  const pathname = usePathname();
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -65,6 +67,7 @@ export function ChatBox() {
   useEffect(() => {
     let firstLoad = true;
     let cancelled = false;
+    let retryTimer: number | undefined;
     async function loadRooms() {
       try {
         const response = await api.get("/chat/rooms");
@@ -84,6 +87,10 @@ export function ChatBox() {
             });
           }
           firstLoad = false;
+          // If rooms came back empty, retry once after 1.5s (covers race conditions after video call)
+          if (rows.length === 0 && !retryTimer) {
+            retryTimer = window.setTimeout(() => { if (!cancelled) loadRooms(); }, 1500);
+          }
         }
       } catch {
         if (!cancelled) setRooms([]);
@@ -92,8 +99,9 @@ export function ChatBox() {
     loadRooms();
     return () => {
       cancelled = true;
+      if (retryTimer) window.clearTimeout(retryTimer);
     };
-  }, []);
+  }, [pathname]);
 
   const refreshMessages = useCallback(async (roomId: string, options?: { clearOnError?: boolean }) => {
     try {
@@ -143,7 +151,7 @@ export function ChatBox() {
     });
     const timer = realtimeEnabled ? null : window.setInterval(() => {
       void refreshMessages(activeRoomId);
-    }, 15_000);
+    }, 5_000);
     return () => {
       cancelled = true;
       if (timer) window.clearInterval(timer);

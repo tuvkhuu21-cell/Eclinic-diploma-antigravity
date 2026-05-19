@@ -44,11 +44,11 @@ export function Navbar() {
     return (
       <header className="sticky top-0 z-40 border-b border-emerald-100 bg-white/95 text-navy shadow-[0_10px_30px_rgba(19,80,68,0.08)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-6 px-6 py-4 sm:flex-nowrap">
-          <Link href="/" className="flex shrink-0 items-center gap-3">
+          <Link href="/" prefetch={false} className="flex shrink-0 items-center gap-3">
             <Image src="/logo/mediconnect.svg" alt="MediConnect" width={180} height={44} className="rounded-xl bg-white" priority />
           </Link>
           <nav className="hidden items-center gap-8 text-sm font-bold text-slate-600 md:flex">
-            <Link href="/" className="border-b-2 border-medical pb-1 text-medical transition hover:text-medical">Нүүр</Link>
+            <Link href="/" prefetch={false} className="border-b-2 border-medical pb-1 text-medical transition hover:text-medical">Нүүр</Link>
             <Link href="/appointments" prefetch={false} className="pb-1 transition hover:text-medical">Захиалга</Link>
           </nav>
           <div className="ml-auto flex items-center gap-3">
@@ -100,32 +100,32 @@ export function Navbar() {
           <div className="bg-[#12312f] text-xs font-semibold text-emerald-50">
             <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-2">
               <div className="flex items-center gap-5">
-                <Link href="/doctor/login" className="hover:text-white">Эмч</Link>
-                <Link href="/hospitals" className="hover:text-white">Байгууллага</Link>
+                <Link href="/doctor/login" prefetch={false} className="hover:text-white">Эмч</Link>
+                <Link href="/hospitals" prefetch={false} className="hover:text-white">Байгууллага</Link>
                 <Link href="/dashboard/patient?section=labs" prefetch={false} className="hover:text-white">Шинжилгээний хариу</Link>
               </div>
               <div className="hidden items-center gap-5 md:flex">
                 <button type="button" className="hover:text-white">Хэл сонгох</button>
-                <Link href="/settings" className="hover:text-white">Бидний тухай</Link>
-                <Link href="/settings" className="hover:text-white">Нууцлалын бодлого</Link>
+                <Link href="/settings" prefetch={false} className="hover:text-white">Бидний тухай</Link>
+                <Link href="/settings" prefetch={false} className="hover:text-white">Нууцлалын бодлого</Link>
               </div>
             </div>
           </div>
         )}
         <div className={`mx-auto flex max-w-7xl items-center gap-6 px-6 py-4 ${hasHydrated && isLoggedIn ? "text-navy" : ""}`}>
-          <Link href={hasHydrated && isLoggedIn ? homeHref : "/"} className="flex shrink-0 items-center gap-3">
+          <Link href={hasHydrated && isLoggedIn ? homeHref : "/"} prefetch={false} className="flex shrink-0 items-center gap-3">
             <Image src="/logo/mediconnect.svg" alt="MediConnect" width={180} height={44} className={hasHydrated && isLoggedIn ? "rounded-xl bg-white" : ""} priority />
           </Link>
           <nav className={`hidden flex-1 items-center justify-center gap-7 text-sm font-semibold lg:flex ${hasHydrated && isLoggedIn ? "text-slate-600" : "text-slate-700"}`}>
             {hasHydrated && isLoggedIn ? (
               <>
-                <Link href={homeHref} className="border-b-2 border-medical pb-1 text-medical">Нүүр</Link>
+                <Link href={homeHref} prefetch={false} className="border-b-2 border-medical pb-1 text-medical">Нүүр</Link>
                 <Link href="/appointments" prefetch={false} className="pb-1 hover:text-medical">Захиалга</Link>
               </>
             ) : (
               <>
-                <Link href="/" className="hover:text-medical">Нүүр</Link>
-                <Link href="/doctors" className="hover:text-medical">Эмчийн нийтлэл</Link>
+                <Link href="/" prefetch={false} className="hover:text-medical">Нүүр</Link>
+                <Link href="/doctors" prefetch={false} className="hover:text-medical">Эмчийн нийтлэл</Link>
               </>
             )}
           </nav>

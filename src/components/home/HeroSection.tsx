@@ -28,7 +28,7 @@ export function HeroSection({ onRequireLogin }: { onRequireLogin?: () => void })
           <p className="mt-5 max-w-2xl text-lg text-slate-600">MediConnect нь эмчийн цаг захиалга, онлайн зөвлөгөө, шинжилгээний хариу, AI туслах болон бодит цагийн харилцааг нэг дор нэгтгэнэ.</p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Button type="button" onClick={handleAppointmentClick}><CalendarCheck size={18} className="mr-2" />Цаг захиалах</Button>
-            <Link href={loggedIn ? "/consultation" : "#"} onClick={(event) => { if (!loggedIn) { event.preventDefault(); onRequireLogin?.(); } }}>
+            <Link href={loggedIn ? "/consultation" : "#"} prefetch={false} onClick={(event) => { if (!loggedIn) { event.preventDefault(); onRequireLogin?.(); } }}>
               <Button type="button" variant="secondary"><Sparkles size={18} className="mr-2" />Яг одоо зөвлөгөө авах</Button>
             </Link>
           </div>
