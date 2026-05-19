@@ -261,7 +261,13 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
   }, []);
 
   async function ringCall() {
-    await api.patch("/video-calls", { roomId, status: "ringing" }).catch(() => null);
+    if (status === "active" || startedRef.current || acceptedRef.current) return;
+    const response = await api.patch("/video-calls", { roomId, status: "ringing" }).catch(() => null);
+    if (response?.data?.data?.status === "active") {
+      setStatus("active");
+      setNotice("Дуудлага холбогдож байна.");
+      return;
+    }
     setStatus("ringing");
     setNotice("Дуудлага илгээгдлээ. Нөгөө тал зөвшөөрөхийг хүлээж байна...");
     clearRingingTimeout();

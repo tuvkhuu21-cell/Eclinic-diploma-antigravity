@@ -19,6 +19,7 @@ export function DoctorConsultationSearch() {
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<DoctorFilters>(initialFilters);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
 
   useEffect(() => {
@@ -29,7 +30,16 @@ export function DoctorConsultationSearch() {
   }, []);
 
   useEffect(() => {
-    api.get("/doctors").then((response) => setDoctors(response.data.data as Doctor[])).catch(() => setDoctors([]));
+    const specialty = new URLSearchParams(window.location.search).get("specialty");
+    const controller = new AbortController();
+    setLoading(true);
+    api.get("/doctors", { params: specialty ? { specialty, limit: 50 } : { limit: 50 }, signal: controller.signal })
+      .then((response) => setDoctors(response.data.data as Doctor[]))
+      .catch((error) => {
+        if (error?.name !== "CanceledError" && error?.code !== "ERR_CANCELED") setDoctors([]);
+      })
+      .finally(() => setLoading(false));
+    return () => controller.abort();
   }, []);
 
   const filteredDoctors = useMemo(() => {
@@ -40,7 +50,7 @@ export function DoctorConsultationSearch() {
         meta: {
           gender: doctor.gender || "",
           consultationTypes: consultationTypesForDoctor(doctor),
-          consultations: (doctor._count?.appointments || 0) + (doctor._count?.consultations || 0),
+          consultations: doctor._count?.appointments || 0,
         },
       }))
       .filter((doctor) => {
@@ -75,7 +85,10 @@ export function DoctorConsultationSearch() {
             <input className="ml-3 w-full text-sm outline-none" placeholder="Хайх эмчийн нэрийг оруулна уу..." value={query} onChange={(event) => setQuery(event.target.value)} />
           </div>
           <div className="mt-5 grid gap-3">
-            {filteredDoctors.map((doctor) => {
+            {loading && Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="h-24 animate-pulse rounded-lg border border-sky-100 bg-slate-50" />
+            ))}
+            {!loading && filteredDoctors.map((doctor) => {
               const doctorName = `${doctor.user.lastName || ""} ${doctor.user.firstName}`.trim();
               return (
               <button key={doctor.id} type="button" className="flex flex-col gap-4 rounded-lg border border-sky-100 p-4 text-left transition hover:bg-cyanSoft md:flex-row md:items-center" onClick={() => setSelectedDoctor(doctor)}>
@@ -99,7 +112,7 @@ export function DoctorConsultationSearch() {
                 </div>
               </button>
             );})}
-            {filteredDoctors.length === 0 && (
+            {!loading && filteredDoctors.length === 0 && (
               <div className="grid min-h-56 place-items-center rounded-lg border border-dashed border-sky-100 bg-cyanSoft text-center">
                 <p className="text-lg font-bold text-navy">{doctors.length === 0 ? "Одоогоор эмч бүртгэлгүй байна." : "Илэрц олдсонгүй"}</p>
               </div>

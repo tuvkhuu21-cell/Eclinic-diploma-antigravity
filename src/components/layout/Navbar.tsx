@@ -49,7 +49,7 @@ export function Navbar() {
           </Link>
           <nav className="hidden items-center gap-8 text-sm font-bold text-slate-600 md:flex">
             <Link href="/" className="border-b-2 border-medical pb-1 text-medical transition hover:text-medical">Нүүр</Link>
-            <Link href="/appointments" className="pb-1 transition hover:text-medical">Захиалга</Link>
+            <Link href="/appointments" prefetch={false} className="pb-1 transition hover:text-medical">Захиалга</Link>
           </nav>
           <div className="ml-auto flex items-center gap-3">
             <ChatIconLink className="mediconnect-pill-icon" />
@@ -102,7 +102,7 @@ export function Navbar() {
               <div className="flex items-center gap-5">
                 <Link href="/doctor/login" className="hover:text-white">Эмч</Link>
                 <Link href="/hospitals" className="hover:text-white">Байгууллага</Link>
-                <Link href="/dashboard/patient?section=labs" className="hover:text-white">Шинжилгээний хариу</Link>
+                <Link href="/dashboard/patient?section=labs" prefetch={false} className="hover:text-white">Шинжилгээний хариу</Link>
               </div>
               <div className="hidden items-center gap-5 md:flex">
                 <button type="button" className="hover:text-white">Хэл сонгох</button>
@@ -120,7 +120,7 @@ export function Navbar() {
             {hasHydrated && isLoggedIn ? (
               <>
                 <Link href={homeHref} className="border-b-2 border-medical pb-1 text-medical">Нүүр</Link>
-                <Link href="/appointments" className="pb-1 hover:text-medical">Захиалга</Link>
+                <Link href="/appointments" prefetch={false} className="pb-1 hover:text-medical">Захиалга</Link>
               </>
             ) : (
               <>

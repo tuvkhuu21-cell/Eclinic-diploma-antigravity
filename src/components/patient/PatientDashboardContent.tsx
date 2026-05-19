@@ -362,23 +362,26 @@ async function startPatientVideoCall(appointment: PatientAppointment, user?: { i
     doctorId: appointment.doctor.id,
     appointmentId: appointment.id,
   });
-  const roomId = response.data.data.roomId as string;
-  await api.patch("/video-calls", { roomId, status: "ringing" }).catch(() => null);
-  const doctorUserId = appointment.doctor.user.id;
-  if (doctorUserId) {
-    void broadcastRealtime(`user-notifications-${doctorUserId}`, "incoming-video-call", {
+  const call = response.data.data as { roomId: string; status?: string };
+  const roomId = call.roomId;
+  if (call.status !== "active") {
+    await api.patch("/video-calls", { roomId, status: "ringing" }).catch(() => null);
+    const doctorUserId = appointment.doctor.user.id;
+    if (doctorUserId) {
+      void broadcastRealtime(`user-notifications-${doctorUserId}`, "incoming-video-call", {
+        roomId,
+        appointmentId: appointment.id,
+        callerId: user?.id,
+        callerName: `${user?.lastName || ""} ${user?.firstName || "Үйлчлүүлэгч"}`.trim(),
+      });
+    }
+    void broadcastRealtime(`video-call-${roomId}`, "call-ringing", {
       roomId,
       appointmentId: appointment.id,
       callerId: user?.id,
-      callerName: `${user?.lastName || ""} ${user?.firstName || "Үйлчлүүлэгч"}`.trim(),
     });
   }
-  void broadcastRealtime(`video-call-${roomId}`, "call-ringing", {
-    roomId,
-    appointmentId: appointment.id,
-    callerId: user?.id,
-  });
-  window.location.href = `/video-call/${roomId}?start=1`;
+  window.location.href = `/video-call/${roomId}${call.status === "active" ? "?accept=1" : "?start=1"}`;
 }
 
 function formatDateTime(value: string) {

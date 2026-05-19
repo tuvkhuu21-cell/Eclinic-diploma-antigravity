@@ -26,6 +26,7 @@ export function AppointmentFilterSidebar({ active, children }: { active: Appoint
           <Link
             key={category.key}
             href={category.href}
+            prefetch={false}
             className={cn(
               "rounded-lg border px-3 py-3 text-left text-sm font-bold transition",
               active === category.key ? "border-sky-100 bg-cyanSoft text-medical" : "border-transparent text-slate-600 hover:border-sky-100 hover:bg-cyanSoft hover:text-medical",

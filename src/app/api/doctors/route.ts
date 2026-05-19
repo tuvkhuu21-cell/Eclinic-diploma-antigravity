@@ -9,7 +9,14 @@ export const OPTIONS = options;
 
 export async function GET(request: NextRequest) {
   try {
-    return ok(await doctorService.list({ q: request.nextUrl.searchParams.get("q"), specialty: request.nextUrl.searchParams.get("specialty") }));
+    const startedAt = Date.now();
+    const rows = await doctorService.list({
+      q: request.nextUrl.searchParams.get("q"),
+      specialty: request.nextUrl.searchParams.get("specialty"),
+      limit: request.nextUrl.searchParams.get("limit"),
+    });
+    if (Date.now() - startedAt > 600) console.info("GET /api/doctors slow", { ms: Date.now() - startedAt, count: rows.length });
+    return ok(rows);
   } catch (error) {
     if (error instanceof ApiError) return fail(error.message, error.statusCode);
     console.error("GET /api/doctors failed", error);

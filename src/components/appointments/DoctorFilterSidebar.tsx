@@ -123,6 +123,7 @@ export function DoctorFilterSidebar({ filters, onChange, hospitalOptions: doctor
           <Link
             key={category.label}
             href={category.href}
+            prefetch={false}
             className={cn(
               "rounded-lg border px-3 py-3 text-left text-sm font-bold transition",
               category.active ? "border-sky-100 bg-cyanSoft text-medical" : "border-transparent text-slate-600 hover:border-sky-100 hover:bg-cyanSoft hover:text-medical",

@@ -141,12 +141,9 @@ export function PatientHome() {
   useEffect(() => {
     async function loadAppointments() {
       try {
-        const [myResponse, allResponse] = await Promise.all([
-          api.get("/appointments/my").catch(() => ({ data: { data: [] } })),
-          api.get("/appointments").catch(() => ({ data: { data: [] } })),
-        ]);
+        const myResponse = await api.get("/appointments/my").catch(() => ({ data: { data: [] } }));
         const byId = new Map<string, PatientAppointment>();
-        for (const appointment of [...((myResponse.data.data || []) as PatientAppointment[]), ...((allResponse.data.data || []) as PatientAppointment[])]) {
+        for (const appointment of ((myResponse.data.data || []) as PatientAppointment[])) {
           if (appointment?.id && appointment?.scheduledAt && appointment?.doctor?.user) byId.set(appointment.id, appointment);
         }
         const now = Date.now();
@@ -227,7 +224,7 @@ export function PatientHome() {
                       {doctorResults.map((doctor) => {
                         const name = `${doctor.user?.lastName || ""} ${doctor.user?.firstName || ""}`.trim() || "Эмч";
                         return (
-                          <Link key={doctor.id} href={`/patient/home/search/doctor?specialty=${encodeURIComponent(doctor.specialty || "")}`} className="block rounded-2xl border border-emerald-100 p-3 transition hover:bg-cyanSoft">
+                          <Link key={doctor.id} href={`/patient/home/search/doctor?specialty=${encodeURIComponent(doctor.specialty || "")}`} prefetch={false} className="block rounded-2xl border border-emerald-100 p-3 transition hover:bg-cyanSoft">
                             <p className="font-extrabold text-navy">{name}</p>
                             <p className="mt-1 text-xs font-semibold text-slate-600">{doctor.specialty || "Мэргэжил тодорхойгүй"} · {doctor.experience || 0} жил</p>
                             <p className="mt-1 text-xs font-semibold text-slate-500">{doctor.hospital?.name || "Эмнэлэг бүртгээгүй"} · {formatMoney(doctor.fee || 30000)}</p>
@@ -238,7 +235,7 @@ export function PatientHome() {
                     </SearchResultSection>
                     <SearchResultSection title="Эмнэлэг" icon={<Building2 size={18} />}>
                       {hospitalResults.map((hospital) => (
-                        <Link key={hospital.id} href={`/patient/home/search/hospital?q=${encodeURIComponent(hospital.name)}`} className="block rounded-2xl border border-emerald-100 p-3 transition hover:bg-cyanSoft">
+                        <Link key={hospital.id} href={`/patient/home/search/hospital?q=${encodeURIComponent(hospital.name)}`} prefetch={false} className="block rounded-2xl border border-emerald-100 p-3 transition hover:bg-cyanSoft">
                           <p className="font-extrabold text-navy">{hospital.name}</p>
                           <p className="mt-1 text-xs font-semibold text-slate-600">{hospital.type || "Эмнэлэг"} · {hospital.district || "Байршил тодорхойгүй"}</p>
                           <p className="mt-1 line-clamp-2 text-xs font-semibold text-slate-500">{hospital.address || "Хаяг бүртгээгүй"}</p>
@@ -248,7 +245,7 @@ export function PatientHome() {
                     </SearchResultSection>
                     <SearchResultSection title="Шинжилгээ" icon={<FileText size={18} />}>
                       {labResults.map((lab) => (
-                        <Link key={lab.id} href="/dashboard/patient?section=labs" className="block rounded-2xl border border-emerald-100 p-3 transition hover:bg-cyanSoft">
+                        <Link key={lab.id} href="/dashboard/patient?section=labs" prefetch={false} className="block rounded-2xl border border-emerald-100 p-3 transition hover:bg-cyanSoft">
                           <p className="font-extrabold text-navy">{lab.title}</p>
                           <p className="mt-1 text-xs font-semibold text-slate-600">{lab.labName || "Лаборатори"} · {lab.status || "Бэлэн"}</p>
                           <p className="mt-1 text-xs font-semibold text-slate-500">{lab.issuedAt ? formatShortDate(lab.issuedAt) : lab.code || "Огноо тодорхойгүй"}</p>
@@ -284,7 +281,7 @@ export function PatientHome() {
                 <p className="mt-5 font-extrabold leading-5 text-[#263238]">{title}</p>
               </button>
             ) : (
-            <Link key={title} href={href || "#"} className="group flex min-h-[150px] flex-col items-center justify-center rounded-2xl border border-emerald-100 bg-white p-5 text-center shadow-[0_16px_42px_rgba(19,80,68,0.08)] transition hover:-translate-y-1 hover:border-emerald-200 hover:shadow-[0_24px_60px_rgba(19,80,68,0.14)]">
+            <Link key={title} href={href || "#"} prefetch={href?.startsWith("/dashboard") ? false : undefined} className="group flex min-h-[150px] flex-col items-center justify-center rounded-2xl border border-emerald-100 bg-white p-5 text-center shadow-[0_16px_42px_rgba(19,80,68,0.08)] transition hover:-translate-y-1 hover:border-emerald-200 hover:shadow-[0_24px_60px_rgba(19,80,68,0.14)]">
               <div className="grid h-14 w-14 place-items-center rounded-full bg-cyanSoft text-medical transition group-hover:bg-medical group-hover:text-white"><Icon size={25} /></div>
               <p className="mt-5 font-extrabold leading-5 text-[#263238]">{title}</p>
             </Link>
@@ -297,7 +294,7 @@ export function PatientHome() {
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-2xl font-bold text-[#12312f]">Та ямар эмч хайж байна вэ?</h2>
             <div className="flex items-center gap-2">
-              <Link href="/patient/home/specialties" className="text-sm font-bold text-medical hover:text-sky-600">
+              <Link href="/patient/home/specialties" prefetch={false} className="text-sm font-bold text-medical hover:text-sky-600">
                 Бүгдийг харах (38)
               </Link>
               <button type="button" aria-label="Previous specialties" className="grid h-10 w-10 place-items-center rounded-full border border-sky-100 bg-white text-medical shadow-sm hover:bg-cyanSoft disabled:cursor-not-allowed disabled:opacity-40" disabled={!canMovePrevious} onClick={() => moveSpecialties(-1)}>
@@ -320,6 +317,7 @@ export function PatientHome() {
                   <Link
                     key={item}
                     href={`/patient/home/search/doctor?specialty=${encodeURIComponent(item)}`}
+                    prefetch={false}
                     className="group flex h-40 w-full flex-col items-center justify-center rounded-2xl border border-sky-100 bg-white p-4 text-center shadow-sm transition hover:-translate-y-1 hover:border-cyan-200 hover:shadow-[0_18px_36px_rgba(25,105,89,0.14)]"
                   >
                     <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-cyanSoft text-medical transition group-hover:bg-medical group-hover:text-white">
@@ -337,7 +335,7 @@ export function PatientHome() {
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_10px_28px_rgba(19,80,68,0.08)]">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-xl font-extrabold text-[#263238]">Захиалсан цагууд</h2>
-              <Link href="/dashboard/patient?section=orders" className="text-xs font-extrabold text-medical hover:text-[#1d6758]">Бүх захиалга</Link>
+              <Link href="/dashboard/patient?section=orders" prefetch={false} className="text-xs font-extrabold text-medical hover:text-[#1d6758]">Бүх захиалга</Link>
             </div>
             <div className="patient-home-scroll mt-4 grid max-h-[500px] gap-3 overflow-y-auto pr-2">
               {appointments.length === 0 && (
@@ -357,7 +355,7 @@ export function PatientHome() {
                       <p className="mt-2 text-sm font-extrabold text-navy">{isPackageOrder ? appointment.packageName || "Багц шинжилгээ" : doctorName}</p>
                       <p className="mt-1 line-clamp-1 text-xs font-semibold text-slate-600">{isPackageOrder ? "Багц шинжилгээ" : isHospitalVisit ? "Биечлэн үзүүлэх" : "Онлайн зөвлөгөө"}{!isPackageOrder ? ` · ${appointment.specialty || appointment.doctor.specialty}` : ""}{appointment.room ? ` · Өрөө ${appointment.room}` : ""} · {appointment.paymentStatus === "PAID" ? "Төлбөр төлөгдсөн" : "Төлбөр хүлээгдэж байгаа"}</p>
                       {!isHospitalVisit && !isPackageOrder && chatRoomId && (
-                        <Link href={`/chat?roomId=${chatRoomId}`} className="mt-3 inline-flex items-center gap-2 text-sm font-extrabold text-medical transition hover:text-[#1d6758]">
+                        <Link href={`/chat?roomId=${chatRoomId}`} prefetch={false} className="mt-3 inline-flex items-center gap-2 text-sm font-extrabold text-medical transition hover:text-[#1d6758]">
                           <MessageCircle size={15} />
                           Чатлах
                         </Link>
@@ -372,9 +370,9 @@ export function PatientHome() {
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_10px_28px_rgba(19,80,68,0.08)]">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-xl font-extrabold text-[#263238]">Шинжилгээ</h2>
-              <Link href="/dashboard/patient?section=labs" className="text-xs font-extrabold text-medical hover:text-[#1d6758]">Бүх хариу</Link>
+              <Link href="/dashboard/patient?section=labs" prefetch={false} className="text-xs font-extrabold text-medical hover:text-[#1d6758]">Бүх хариу</Link>
             </div>
-            <Link href="/dashboard/patient?section=labs" className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-600 transition hover:border-emerald-200 hover:bg-cyanSoft">
+            <Link href="/dashboard/patient?section=labs" prefetch={false} className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-600 transition hover:border-emerald-200 hover:bg-cyanSoft">
               <span className="flex items-center gap-3"><TestTube2 className="text-medical" size={20} /> CBC-2026-001 хариу бэлэн</span>
               <span className="text-xl text-slate-300">›</span>
             </Link>

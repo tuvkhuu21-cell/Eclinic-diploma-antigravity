@@ -1,7 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/errors";
 
-const closedStatuses = new Set(["ended", "declined"]);
+const closedStatuses = new Set(["ended", "declined", "rejected", "cancelled", "missed"]);
+const allowedTransitions: Record<string, Set<string>> = {
+  REQUESTED: new Set(["waiting", "ringing", "active", "declined", "ended"]),
+  waiting: new Set(["ringing", "active", "declined", "ended"]),
+  ringing: new Set(["active", "declined", "ended"]),
+  active: new Set(["ended"]),
+  declined: new Set([]),
+  ended: new Set([]),
+};
 const RINGING_TIMEOUT_MS = 30_000;
 
 export const videoService = {
@@ -105,12 +113,18 @@ export const videoService = {
     return prisma.videoCall.update({ where: { roomId }, data: { status: "active", startedAt: new Date() } });
   },
   async updateStatus(userId: string, roomId: string, status: "waiting" | "ringing" | "active" | "declined" | "ended") {
-    await this.getByRoom(userId, roomId);
+    const current = await this.getByRoom(userId, roomId);
+    if (current.status === status) return current;
+    const allowed = allowedTransitions[current.status]?.has(status);
+    if (!allowed) {
+      console.warn("video-call: ignored invalid status transition", { roomId, from: current.status, to: status });
+      return current;
+    }
     const updated = await prisma.videoCall.update({
       where: { roomId },
       data: {
         status,
-        startedAt: status === "active" || status === "ringing" ? new Date() : status === "waiting" ? null : undefined,
+        startedAt: status === "active" ? (current.startedAt || new Date()) : status === "ringing" ? new Date() : status === "waiting" ? null : undefined,
         endedAt: status === "ended" || status === "declined" ? new Date() : undefined,
       },
     });

@@ -62,7 +62,7 @@ export function ChatIconLink({ className, iconSize = 19 }: { className?: string;
   }
 
   return (
-    <Link href="/chat" aria-label="Chat" className={cn("relative grid h-11 w-11 place-items-center rounded-full transition hover:bg-cyanSoft", className)} onClick={markChatRead}>
+    <Link href="/chat" prefetch={false} aria-label="Chat" className={cn("relative grid h-11 w-11 place-items-center rounded-full transition hover:bg-cyanSoft", className)} onClick={markChatRead}>
       <MessageCircle size={iconSize} />
       {unreadCount > 0 && (
         <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-rose-600 px-1 text-[11px] font-bold text-white ring-2 ring-white">

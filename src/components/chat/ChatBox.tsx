@@ -268,25 +268,28 @@ export function ChatBox() {
       doctorId: activeRoom.doctor.id,
       appointmentId: activeRoom.appointment.id,
     });
-    const roomId = response.data.data.roomId as string;
+    const call = response.data.data as { roomId: string; status?: string };
+    const roomId = call.roomId;
     const recipientUserId = user?.role === "DOCTOR" ? activeRoom.patient.user.id : activeRoom.doctor.user.id;
-    if (recipientUserId) {
-      void broadcastRealtime(`user-notifications-${recipientUserId}`, "incoming-video-call", {
+    if (call.status !== "active") {
+      await api.patch("/video-calls", { roomId, status: "ringing" }).catch(() => null);
+      if (recipientUserId) {
+        void broadcastRealtime(`user-notifications-${recipientUserId}`, "incoming-video-call", {
+          roomId,
+          appointmentId: activeRoom.appointment.id,
+          callerId: user?.id,
+          callerName: user?.role === "DOCTOR"
+            ? `${activeRoom.doctor.user.lastName || ""} ${activeRoom.doctor.user.firstName}`.trim()
+            : `${activeRoom.patient.user.lastName || ""} ${activeRoom.patient.user.firstName}`.trim(),
+        });
+      }
+      void broadcastRealtime(`video-call-${roomId}`, "call-ringing", {
         roomId,
         appointmentId: activeRoom.appointment.id,
         callerId: user?.id,
-        callerName: user?.role === "DOCTOR"
-          ? `${activeRoom.doctor.user.lastName || ""} ${activeRoom.doctor.user.firstName}`.trim()
-          : `${activeRoom.patient.user.lastName || ""} ${activeRoom.patient.user.firstName}`.trim(),
       });
     }
-    await api.patch("/video-calls", { roomId, status: "ringing" }).catch(() => null);
-    void broadcastRealtime(`video-call-${roomId}`, "call-ringing", {
-      roomId,
-      appointmentId: activeRoom.appointment.id,
-      callerId: user?.id,
-    });
-    window.location.href = `/video-call/${roomId}?start=1`;
+    window.location.href = `/video-call/${roomId}${call.status === "active" ? "?accept=1" : "?start=1"}`;
   }
 
   return (

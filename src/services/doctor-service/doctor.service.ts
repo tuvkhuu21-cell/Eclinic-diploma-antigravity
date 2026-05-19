@@ -22,7 +22,7 @@ async function findHospitalId(name?: string) {
 }
 
 export const doctorService = {
-  list: (query: { q?: string | null; specialty?: string | null }) =>
+  list: (query: { q?: string | null; specialty?: string | null; limit?: string | null }) =>
     prisma.doctorProfile.findMany({
       where: {
         specialty: query.specialty ? { contains: query.specialty, mode: "insensitive" } : undefined,
@@ -42,11 +42,10 @@ export const doctorService = {
         verified: true,
         user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
         hospital: { select: { id: true, name: true, address: true, phone: true } },
-        departments: { select: { id: true, name: true } },
-        _count: { select: { appointments: true, consultations: true } },
+        _count: { select: { appointments: true } },
       },
       orderBy: { user: { createdAt: "desc" } },
-      take: 80,
+      take: Math.min(Math.max(Number(query.limit) || 50, 1), 60),
     }),
   detail: (id: string) => prisma.doctorProfile.findUnique({
     where: { id },
