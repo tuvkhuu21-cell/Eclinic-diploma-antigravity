@@ -3,6 +3,65 @@
 @tailwind utilities;
 
 :root { color-scheme: light; }
-body { background: #f8fbff; color: #0f172a; }
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(214, 245, 235, 0.9), transparent 32rem),
+    linear-gradient(180deg, #f7fcf9 0%, #eef8f4 44%, #f8fbff 100%);
+  color: #12312f;
+}
 * { box-sizing: border-box; }
 
+::selection {
+  background: rgba(35, 123, 104, 0.18);
+  color: #12312f;
+}
+
+input,
+select,
+textarea {
+  border-radius: 1rem;
+}
+
+.shadow-soft {
+  box-shadow: 0 18px 45px rgba(25, 105, 89, 0.10);
+}
+
+.mediconnect-surface {
+  border: 1px solid rgba(187, 225, 214, 0.72);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 20px 60px rgba(25, 105, 89, 0.10);
+  backdrop-filter: blur(18px);
+}
+
+.mediconnect-pill-icon {
+  border: 1px solid rgba(187, 225, 214, 0.72);
+  background: #ffffff;
+  color: #237b68;
+  box-shadow: 0 12px 30px rgba(25, 105, 89, 0.12);
+}
+
+.video-call-chat-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #9fb7c7 #f8fafc;
+  scroll-behavior: smooth;
+}
+
+.video-call-chat-scroll::-webkit-scrollbar {
+  width: 9px;
+}
+
+.video-call-chat-scroll::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 999px;
+}
+
+.video-call-chat-scroll::-webkit-scrollbar-thumb {
+  background: #9fb7c7;
+  border: 2px solid #f8fafc;
+  border-radius: 999px;
+}
+
+.video-call-chat-scroll::-webkit-scrollbar-thumb:hover {
+  background: #7895a7;
+}

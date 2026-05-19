@@ -18,7 +18,7 @@ export function NotificationItem({
     <button
       type="button"
       onClick={onClick}
-      className="group flex w-full gap-3 rounded-2xl border border-sky-50 bg-white p-3 text-left shadow-[0_10px_26px_rgba(14,116,144,0.08)] transition hover:border-sky-200 hover:bg-sky-50/50"
+      className="group flex w-full gap-3 rounded-2xl border border-emerald-50 bg-white p-3 text-left shadow-[0_10px_26px_rgba(25,105,89,0.08)] transition hover:border-emerald-200 hover:bg-emerald-50/50"
     >
       <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-full bg-cyanSoft text-medical", unread && "bg-medical text-white")}>
         <BellRing size={18} />

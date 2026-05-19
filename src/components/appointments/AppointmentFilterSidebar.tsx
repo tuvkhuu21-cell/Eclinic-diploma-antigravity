@@ -13,7 +13,7 @@ const categories: Array<{ key: AppointmentFilterContext; label: string; href: st
 const filtersByContext: Record<AppointmentFilterContext, string[]> = {
   doctor: ["Эрэмбэ", "Эмнэлэг", "Хүйс", "Үзлэгийн төрөл", "Нарийн мэргэжил"],
   hospital: ["Одоо нээлттэй", "Байршил", "Үйл ажиллагааны чиглэл"],
-  laboratory: ["Одоо нээлттэй", "Байршил"],
+  laboratory: [],
   package: [],
 };
 

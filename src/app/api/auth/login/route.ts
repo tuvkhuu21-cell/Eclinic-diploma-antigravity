@@ -12,9 +12,15 @@ export async function POST(request: NextRequest) {
   try {
     const input = validateBody(loginSchema, await request.json());
     const data = await authService.login(input);
-    return ok(data, "logged in");
+    const response = ok(data, "logged in");
+    response.cookies.set("mediconnect_token", data.token, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+      sameSite: "lax",
+      secure: false,
+    });
+    return response;
   } catch (error) {
     return fail(errorMessage(error), error instanceof ApiError ? error.statusCode : 500);
   }
 }
-

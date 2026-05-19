@@ -11,11 +11,19 @@ export const OPTIONS = options;
 
 export async function POST(request: NextRequest) {
   try {
-    const user = getAuthUser(request);
+    const user = getOptionalAuthUser(request);
     const input = validateBody(aiAskSchema, await request.json());
-    return ok(await aiService.ask(user.userId, user.role, input));
+    return ok(await aiService.ask(user?.userId || null, user?.role || "PATIENT", input));
   } catch (error) {
     return fail(errorMessage(error), error instanceof ApiError ? error.statusCode : 500);
+  }
+}
+
+function getOptionalAuthUser(request: NextRequest) {
+  try {
+    return getAuthUser(request);
+  } catch {
+    return null;
   }
 }
 

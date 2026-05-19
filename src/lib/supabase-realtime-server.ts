@@ -4,10 +4,19 @@ let missingEnvLogged = false;
 const missingEnvMessage = "Supabase environment variables are missing";
 
 function getServerSupabaseEnv() {
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    || process.env.NEXT_PUBLIC_SUPABASE_PROJECT_URL
+    || process.env.SUPABASE_URL;
   return {
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    url: normalizeSupabaseUrl(rawUrl),
+    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY
+      || process.env.SUPABASE_SECRET_KEY
+      || process.env.SUPABASE_SERVICE_KEY,
   };
+}
+
+function normalizeSupabaseUrl(url?: string) {
+  return url?.replace(/\/rest\/v1\/?$/, "").replace(/\/+$/, "");
 }
 
 function logMissingSupabaseEnv() {

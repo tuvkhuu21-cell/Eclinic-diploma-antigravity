@@ -24,8 +24,9 @@ export function NotificationBox({ variant = "list", buttonClassName }: { variant
   const { user, role } = useAuthStore();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
+  const [todayKey, setTodayKey] = useState(() => formatDate(new Date().toISOString()));
   const rootRef = useRef<HTMLDivElement>(null);
-  const unreadCount = notifications.filter((item) => !item.readAt).length;
+  const unreadCount = notifications.filter((item) => !item.readAt && formatDate(item.createdAt) === todayKey).length;
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -33,6 +34,11 @@ export function NotificationBox({ variant = "list", buttonClassName }: { variant
     }
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setTodayKey(formatDate(new Date().toISOString())), 60_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -47,23 +53,25 @@ export function NotificationBox({ variant = "list", buttonClassName }: { variant
     }
 
     loadNotifications();
+    const refreshTimer = window.setInterval(loadNotifications, 5_000);
     const channel = user?.id ? subscribeBroadcast<NotificationRow>(`user-notifications-${user.id}`, "new-notification", (notification) => {
       setNotifications((current) => [notification, ...current.filter((item) => item.id !== notification.id)]);
     }) : null;
     return () => {
       cancelled = true;
+      window.clearInterval(refreshTimer);
       removeRealtimeChannel(channel);
     };
   }, [user?.id]);
 
   useEffect(() => {
     if (!open) return;
-    const visibleUnread = notifications.filter((item) => !item.readAt).slice(0, 8);
+    const visibleUnread = notifications.filter((item) => !item.readAt && formatDate(item.createdAt) === todayKey).slice(0, 8);
     if (visibleUnread.length === 0) return;
     const readAt = new Date().toISOString();
     setNotifications((current) => current.map((item) => visibleUnread.some((row) => row.id === item.id) ? { ...item, readAt } : item));
     void Promise.all(visibleUnread.map((item) => api.patch(`/notifications/${item.id}/read`).catch(() => null)));
-  }, [open, notifications]);
+  }, [open, notifications, todayKey]);
 
   function handleNotificationClick(notification: NotificationRow) {
     const href = inferNotificationHref(notification, user?.role || role);
@@ -80,6 +88,7 @@ export function NotificationBox({ variant = "list", buttonClassName }: { variant
           onClose={() => setOpen(false)}
           onNavigate={() => setOpen(false)}
           onNotificationClick={handleNotificationClick}
+          todayKey={todayKey}
           showClose={false}
         />
       </div>
@@ -91,7 +100,7 @@ export function NotificationBox({ variant = "list", buttonClassName }: { variant
       <button
         type="button"
         aria-label="Notifications"
-        className={cn("relative grid h-11 w-11 place-items-center rounded-full border border-sky-100 bg-white text-navy shadow-sm transition hover:bg-cyanSoft", buttonClassName)}
+        className={cn("relative grid h-11 w-11 place-items-center rounded-full border border-emerald-100 bg-white text-navy shadow-sm transition hover:bg-cyanSoft", buttonClassName)}
         onClick={() => setOpen((current) => !current)}
       >
         <Bell size={19} />
@@ -102,12 +111,13 @@ export function NotificationBox({ variant = "list", buttonClassName }: { variant
         )}
       </button>
       {open && (
-        <div className="absolute right-0 top-14 z-50 w-[calc(100vw-2rem)] max-w-[400px] overflow-hidden rounded-3xl border border-sky-100 bg-white shadow-[0_24px_70px_rgba(11,91,134,0.22)]">
+        <div className="absolute right-0 top-14 z-50 w-[calc(100vw-2rem)] max-w-[400px] overflow-hidden rounded-3xl border border-emerald-100 bg-white shadow-[0_24px_70px_rgba(25,105,89,0.20)]">
           <DropdownContent
             notifications={notifications}
             onClose={() => setOpen(false)}
             onNavigate={() => setOpen(false)}
             onNotificationClick={handleNotificationClick}
+            todayKey={todayKey}
           />
         </div>
       )}
@@ -120,30 +130,32 @@ function DropdownContent({
   onClose,
   onNavigate,
   onNotificationClick,
+  todayKey,
   showClose = true,
 }: {
   notifications: NotificationRow[];
   onClose: () => void;
   onNavigate: () => void;
   onNotificationClick: (notification: NotificationRow) => void;
+  todayKey: string;
   showClose?: boolean;
 }) {
-  const rows = notifications.slice(0, 8);
+  const rows = notifications.filter((item) => formatDate(item.createdAt) === todayKey).slice(0, 8);
   const groups = groupNotifications(rows);
 
   return (
     <div className="bg-white">
-      <div className="flex items-center justify-between border-b border-sky-50 px-5 py-4">
+      <div className="flex items-center justify-between border-b border-emerald-50 px-5 py-4">
         <h2 className="text-base font-extrabold text-navy">Мэдэгдэл</h2>
         {showClose && (
-          <button type="button" aria-label="Close notifications" className="grid h-8 w-8 place-items-center rounded-full text-slate-500 transition hover:bg-sky-50 hover:text-medical" onClick={onClose}>
+          <button type="button" aria-label="Close notifications" className="grid h-8 w-8 place-items-center rounded-full text-slate-500 transition hover:bg-emerald-50 hover:text-medical" onClick={onClose}>
             <X size={18} />
           </button>
         )}
       </div>
       <div className="max-h-[420px] overflow-y-auto px-4 py-4 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent]">
         {rows.length === 0 && (
-          <p className="rounded-2xl border border-dashed border-sky-100 bg-cyanSoft p-4 text-sm font-semibold text-medical">Одоогоор мэдэгдэл алга.</p>
+          <p className="rounded-2xl border border-dashed border-sky-100 bg-cyanSoft p-4 text-sm font-semibold text-medical">Өнөөдрийн мэдэгдэл алга.</p>
         )}
         {groups.map((group) => (
           <section key={group.date} className="mb-4 last:mb-0">
@@ -163,7 +175,7 @@ function DropdownContent({
           </section>
         ))}
       </div>
-      <Link href="/notifications" onClick={onNavigate} className="block border-t border-sky-50 px-5 py-4 text-center text-sm font-bold text-medical transition hover:bg-cyanSoft">
+      <Link href="/notifications" onClick={onNavigate} className="block border-t border-emerald-50 px-5 py-4 text-center text-sm font-bold text-medical transition hover:bg-cyanSoft">
         Бүх мэдэгдэл харах
       </Link>
     </div>

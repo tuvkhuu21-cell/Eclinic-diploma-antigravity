@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": process.env.FRONTEND_URL || "http://localhost:3001",
-  "Access-Control-Allow-Credentials": "true",
+  "Access-Control-Allow-Origin": process.env.NODE_ENV === "production" ? (process.env.FRONTEND_URL || "") : "*",
+  "Access-Control-Allow-Credentials": process.env.NODE_ENV === "production" ? "true" : "false",
   "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type,Authorization",
 };

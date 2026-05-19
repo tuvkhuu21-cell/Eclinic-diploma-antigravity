@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bell,
@@ -14,6 +14,7 @@ import {
   Stethoscope,
   UserRound,
   UsersRound,
+  X,
 } from "lucide-react";
 import { NotificationBox } from "@/components/notifications/NotificationBox";
 import { Card } from "@/components/ui/Card";
@@ -34,9 +35,42 @@ type DoctorAppointment = {
   paymentStatus?: string;
   price?: number;
   patient?: {
+    id?: string;
+    dateOfBirth?: string | null;
+    gender?: string | null;
+    registerNo?: string | null;
+    bloodType?: string | null;
+    maritalStatus?: string | null;
+    heightCm?: number | null;
+    weightKg?: number | null;
+    bmi?: number | null;
+    city?: string | null;
+    district?: string | null;
+    khoroo?: string | null;
+    addressDetail?: string | null;
+    emergencyRelation?: string | null;
+    emergencyName?: string | null;
+    emergencyPhone?: string | null;
+    hasAllergy?: boolean | null;
+    allergyNote?: string | null;
+    hasChronicDisease?: boolean | null;
+    chronicDiseaseNote?: string | null;
+    hasRegularMedicine?: boolean | null;
+    regularMedicineNote?: string | null;
+    hasInjury?: boolean | null;
+    injuryNote?: string | null;
+    hasSurgery?: boolean | null;
+    surgeryNote?: string | null;
+    smoking?: string | null;
+    alcohol?: string | null;
+    movement?: string | null;
+    food?: string | null;
     user?: {
+      id?: string;
+      email?: string;
       firstName?: string;
       lastName?: string | null;
+      phone?: string | null;
     };
   };
 };
@@ -64,6 +98,16 @@ export function DoctorDashboard() {
   const isAllowed = activeRole === "DOCTOR" || activeRole === "ADMIN";
   const doctorName = `${user?.lastName || ""} ${user?.firstName || "Эмч"}`.trim();
 
+  const loadDoctorAppointments = useCallback(async () => {
+    if (activeRole !== "DOCTOR") return;
+    try {
+      const response = await api.get("/appointments/doctor");
+      setAppointments((response.data.data || []) as DoctorAppointment[]);
+    } catch {
+      setAppointments([]);
+    }
+  }, [activeRole]);
+
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get("section") as DoctorSection | null;
     if (requested && sections.some((section) => section.key === requested)) setActive(requested);
@@ -82,13 +126,16 @@ export function DoctorDashboard() {
 
   useEffect(() => {
     if (!hasHydrated || activeRole !== "DOCTOR") return;
-    api.get("/appointments/doctor")
-      .then((response) => setAppointments((response.data.data || []) as DoctorAppointment[]))
-      .catch(() => setAppointments([]));
+    void loadDoctorAppointments();
     api.get("/doctors/me")
       .then((response) => setOnline(Boolean(response.data.data?.online || response.data.data?.isOnline)))
       .catch(() => setOnline(false));
-  }, [activeRole, hasHydrated]);
+  }, [activeRole, hasHydrated, loadDoctorAppointments]);
+
+  useEffect(() => {
+    if (!hasHydrated || activeRole !== "DOCTOR") return;
+    if (active === "dashboard" || active === "appointments" || active === "patients") void loadDoctorAppointments();
+  }, [active, activeRole, hasHydrated, loadDoctorAppointments]);
 
   const stats = useMemo(() => {
     const paid = appointments.filter(isPaidAppointment);
@@ -141,9 +188,9 @@ export function DoctorDashboard() {
   }
 
   return (
-    <section className="min-h-screen bg-[#f3f8fc] px-4 py-8">
+    <section className="min-h-screen bg-[#f2faf6] px-4 py-8">
       <div className="mx-auto max-w-7xl">
-        <div className="rounded-[30px] bg-gradient-to-br from-[#0b5b86] via-[#0f7dab] to-[#19b9d2] p-6 text-white shadow-[0_20px_60px_rgba(11,91,134,0.22)]">
+        <div className="rounded-[34px] bg-gradient-to-br from-[#237b68] via-[#2f917b] to-[#8fd8bf] p-6 text-white shadow-[0_20px_60px_rgba(25,105,89,0.22)]">
           <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-bold">
@@ -166,7 +213,7 @@ export function DoctorDashboard() {
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[300px_1fr]">
-          <aside className="h-fit rounded-3xl border border-sky-100 bg-white p-4 shadow-soft">
+          <aside className="h-fit rounded-3xl border border-emerald-100 bg-white p-4 shadow-soft">
             <div className="grid gap-2">
               {sections.map((section) => {
                 const Icon = section.icon;
@@ -174,7 +221,7 @@ export function DoctorDashboard() {
                   <button
                     key={section.key}
                     type="button"
-                    className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-bold transition ${active === section.key ? "bg-cyanSoft text-medical" : "text-slate-600 hover:bg-sky-50 hover:text-medical"}`}
+                    className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-bold transition ${active === section.key ? "bg-cyanSoft text-medical" : "text-slate-600 hover:bg-emerald-50 hover:text-medical"}`}
                     onClick={() => setActive(section.key)}
                   >
                     <Icon size={18} />
@@ -206,7 +253,7 @@ export function DoctorDashboard() {
             {active === "profile" && <DoctorProfileForm />}
             {active === "appointments" && <DoctorAppointmentList />}
             {active === "online" && <DoctorOnlinePanel online={online} />}
-            {active === "patients" && <DoctorPatientsPanel />}
+            {active === "patients" && <DoctorPatientsPanel appointments={paidAppointments} />}
             {active === "chat" && <ChatBox />}
             {active === "notifications" && <NotificationBox />}
             {active === "settings" && <DoctorSettingsPanel />}
@@ -274,7 +321,7 @@ function DoctorHomePanel({
           </div>
           <div className="mt-4 grid gap-3">
             {todaySchedule.map((appointment) => (
-              <article key={appointment.id} className="flex flex-col gap-3 rounded-2xl border border-sky-100 bg-sky-50/50 p-4 md:flex-row md:items-center md:justify-between">
+              <article key={appointment.id} className="flex flex-col gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="font-bold text-navy">{getPatientName(appointment)}</p>
                   <p className="mt-1 text-sm font-semibold text-slate-600">{appointment.scheduledAt ? formatTime(new Date(appointment.scheduledAt)) : "--:--"} · {appointment.type === "ONLINE" ? "Онлайн" : "Биечлэн"}</p>
@@ -285,7 +332,7 @@ function DoctorHomePanel({
                 </div>
               </article>
             ))}
-            {todaySchedule.length === 0 && <p className="rounded-2xl border border-dashed border-sky-100 bg-sky-50/60 p-5 text-sm font-semibold text-slate-600">Өнөөдрийн төлбөр төлөгдсөн цаг одоогоор алга.</p>}
+            {todaySchedule.length === 0 && <p className="rounded-2xl border border-dashed border-emerald-100 bg-emerald-50/60 p-5 text-sm font-semibold text-slate-600">Өнөөдрийн төлбөр төлөгдсөн цаг одоогоор алга.</p>}
           </div>
         </Card>
 
@@ -339,8 +386,8 @@ function AnalyticsChart({ title, data, valueKey, suffix }: { title: string; data
           const height = Math.max(10, Math.round((value / maxValue) * 100));
           return (
             <div key={item.date} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-              <div className="flex h-36 w-full items-end rounded-t-2xl bg-sky-50 px-1">
-                <div className="w-full rounded-t-2xl bg-gradient-to-t from-[#0b5b86] to-[#1ab8d1] transition-all" style={{ height: `${height}%` }} title={`${value}${suffix}`} />
+              <div className="flex h-36 w-full items-end rounded-t-2xl bg-emerald-50 px-1">
+                <div className="w-full rounded-t-2xl bg-gradient-to-t from-[#237b68] to-[#8fd8bf] transition-all" style={{ height: `${height}%` }} title={`${value}${suffix}`} />
               </div>
               <p className="text-[11px] font-bold text-slate-500">{item.date.slice(5).replace("-", ".")}</p>
               <p className="truncate text-xs font-extrabold text-navy">{suffix ? formatMoney(value) : value}</p>
@@ -352,8 +399,64 @@ function AnalyticsChart({ title, data, valueKey, suffix }: { title: string; data
   );
 }
 
-function DoctorPatientsPanel() {
-  return <Card className="p-5"><p className="text-sm font-semibold text-slate-600">Төлбөр төлөгдсөн онлайн болон биечлэн цаг захиалсан өвчтөнүүд “Цаг захиалгууд” хэсгээс харагдана.</p></Card>;
+function DoctorPatientsPanel({ appointments }: { appointments: DoctorAppointment[] }) {
+  const [selectedPatient, setSelectedPatient] = useState<DoctorAppointment | null>(null);
+  const patients = useMemo(() => {
+    const byPatient = new Map<string, DoctorAppointment>();
+    appointments
+      .filter((appointment) => appointment.patient?.id || appointment.patient?.user?.id)
+      .forEach((appointment) => {
+        const key = appointment.patient?.id || appointment.patient?.user?.id || appointment.id;
+        const current = byPatient.get(key);
+        if (!current || new Date(appointment.scheduledAt || 0).getTime() > new Date(current.scheduledAt || 0).getTime()) byPatient.set(key, appointment);
+      });
+    return Array.from(byPatient.values()).sort((left, right) => new Date(right.scheduledAt || 0).getTime() - new Date(left.scheduledAt || 0).getTime());
+  }, [appointments]);
+
+  return (
+    <>
+      <Card className="p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-extrabold text-navy">Өвчтөнүүд</h2>
+            <p className="mt-1 text-sm font-semibold text-slate-500">Төлбөр төлсөн цаг захиалгатай өвчтөнүүд энд харагдана.</p>
+          </div>
+          <span className="rounded-full bg-cyanSoft px-3 py-1 text-xs font-bold text-medical">{patients.length} өвчтөн</span>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-2">
+          {patients.map((appointment) => {
+            const patient = appointment.patient;
+            const name = getPatientName(appointment);
+            return (
+              <button key={patient?.id || appointment.id} type="button" className="rounded-2xl border border-emerald-100 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-medical hover:bg-cyanSoft hover:shadow-soft" onClick={() => setSelectedPatient(appointment)}>
+                <div className="flex items-center gap-3">
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-cyanSoft text-sm font-black text-medical">{name.slice(0, 2)}</div>
+                  <div className="min-w-0">
+                    <h3 className="truncate font-extrabold text-navy">{name}</h3>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">{patient?.user?.phone || patient?.user?.email || "Холбоо барих мэдээлэл алга"}</p>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-1 text-xs font-semibold text-slate-600">
+                  <p>Сүүлийн цаг: {appointment.scheduledAt ? formatDateTime(new Date(appointment.scheduledAt)) : "Огноо алга"}</p>
+                  <p>{appointment.type === "ONLINE" ? "Онлайн зөвлөгөө" : "Биечлэн үзүүлэх"} · {appointment.status || "CONFIRMED"}</p>
+                </div>
+              </button>
+            );
+          })}
+          {patients.length === 0 && (
+            <div className="grid min-h-56 place-items-center rounded-2xl border border-dashed border-emerald-100 bg-emerald-50/60 text-center md:col-span-2">
+              <div>
+                <UsersRound className="mx-auto text-medical" size={34} />
+                <p className="mt-3 font-bold text-navy">Төлбөр төлсөн өвчтөн одоогоор алга.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+      <PatientInfoModal appointment={selectedPatient} onClose={() => setSelectedPatient(null)} />
+    </>
+  );
 }
 
 function DoctorOnlinePanel({ online }: { online: boolean }) {
@@ -362,6 +465,91 @@ function DoctorOnlinePanel({ online }: { online: boolean }) {
 
 function DoctorSettingsPanel() {
   return <Card className="p-5"><p className="font-bold text-navy">Тохиргоо</p><p className="mt-2 text-sm text-slate-600">Эмчийн мэдэгдэл, профайл, системийн тохиргоо энд нэмэгдэнэ.</p></Card>;
+}
+
+function PatientInfoModal({ appointment, onClose }: { appointment: DoctorAppointment | null; onClose: () => void }) {
+  useEffect(() => {
+    if (!appointment) return;
+    const original = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = original;
+    };
+  }, [appointment]);
+
+  if (!appointment?.patient) return null;
+  const patient = appointment.patient;
+  const name = getPatientName(appointment);
+
+  return (
+    <div className="fixed inset-0 z-[120] grid place-items-center bg-slate-900/45 px-4 py-6 backdrop-blur-sm" onMouseDown={onClose}>
+      <div className="max-h-[calc(100vh-3rem)] w-full max-w-4xl overflow-hidden rounded-3xl bg-white shadow-[0_24px_80px_rgba(25,105,89,0.25)]" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="flex items-start gap-4 bg-gradient-to-br from-[#237b68] to-[#8fd8bf] p-6 text-white">
+          <div className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-white text-lg font-black text-medical">{name.slice(0, 2)}</div>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-2xl font-extrabold">{name}</h2>
+            <p className="mt-1 text-sm font-semibold text-emerald-50">{patient.user?.phone || patient.user?.email || "Холбоо барих мэдээлэл алга"}</p>
+            <p className="mt-2 text-xs font-bold text-white/80">Сүүлийн цаг: {appointment.scheduledAt ? formatDateTime(new Date(appointment.scheduledAt)) : "Огноо алга"}</p>
+          </div>
+          <button type="button" className="grid h-9 w-9 place-items-center rounded-full bg-white/15 transition hover:bg-white/25" onClick={onClose} aria-label="Close patient info">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="patient-modal-scroll max-h-[70vh] overflow-y-auto p-6">
+          <div className="grid gap-5 lg:grid-cols-3">
+            <PatientInfoSection title="Хувийн мэдээлэл">
+              <InfoRow label="Регистр" value={patient.registerNo} />
+              <InfoRow label="Хүйс" value={patient.gender} />
+              <InfoRow label="Төрсөн огноо" value={patient.dateOfBirth ? formatDateTime(new Date(patient.dateOfBirth)).slice(0, 10) : ""} />
+              <InfoRow label="Цусны бүлэг" value={patient.bloodType} />
+              <InfoRow label="Гэрлэлтийн байдал" value={patient.maritalStatus} />
+              <InfoRow label="Өндөр" value={patient.heightCm ? `${patient.heightCm} см` : ""} />
+              <InfoRow label="Жин" value={patient.weightKg ? `${patient.weightKg} кг` : ""} />
+              <InfoRow label="БЖИ" value={patient.bmi?.toString()} />
+              <InfoRow label="Хаяг" value={[patient.city, patient.district, patient.khoroo, patient.addressDetail].filter(Boolean).join(", ")} />
+              <InfoRow label="Яаралтай холбоо" value={[patient.emergencyRelation, patient.emergencyName, patient.emergencyPhone].filter(Boolean).join(" · ")} />
+            </PatientInfoSection>
+            <PatientInfoSection title="Эрүүл мэндийн мэдээлэл">
+              <InfoRow label="Харшил" value={formatBooleanNote(patient.hasAllergy, patient.allergyNote)} />
+              <InfoRow label="Архаг өвчин" value={formatBooleanNote(patient.hasChronicDisease, patient.chronicDiseaseNote)} />
+              <InfoRow label="Тогтмол эм" value={formatBooleanNote(patient.hasRegularMedicine, patient.regularMedicineNote)} />
+              <InfoRow label="Гэмтэл" value={formatBooleanNote(patient.hasInjury, patient.injuryNote)} />
+              <InfoRow label="Мэс засал" value={formatBooleanNote(patient.hasSurgery, patient.surgeryNote)} />
+            </PatientInfoSection>
+            <PatientInfoSection title="Амьдралын хэв маяг">
+              <InfoRow label="Тамхи" value={patient.smoking} />
+              <InfoRow label="Согтууруулах ундаа" value={patient.alcohol} />
+              <InfoRow label="Хөдөлгөөн" value={patient.movement} />
+              <InfoRow label="Хооллолт" value={patient.food} />
+            </PatientInfoSection>
+          </div>
+        </div>
+      </div>
+      <style jsx global>{`
+        .patient-modal-scroll { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+        .patient-modal-scroll::-webkit-scrollbar { width: 8px; }
+        .patient-modal-scroll::-webkit-scrollbar-thumb { border-radius: 999px; background: #cbd5e1; }
+      `}</style>
+    </div>
+  );
+}
+
+function PatientInfoSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-emerald-100 bg-[#f8fcfa] p-4">
+      <h3 className="text-base font-extrabold text-medical">{title}</h3>
+      <div className="mt-4 grid gap-3">{children}</div>
+    </section>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="rounded-xl bg-white px-3 py-2 text-sm shadow-sm">
+      <p className="text-xs font-bold text-slate-400">{label}</p>
+      <p className="mt-1 font-semibold text-navy">{value || "Бүртгээгүй"}</p>
+    </div>
+  );
 }
 
 function isPaidAppointment(appointment: DoctorAppointment) {
@@ -385,6 +573,16 @@ function formatTime(date: Date) {
   return `${hours}:${minutes}`;
 }
 
+function formatDateTime(date: Date) {
+  if (Number.isNaN(date.getTime())) return "Огноо алга";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}.${month}.${day} ${hours}:${minutes}`;
+}
+
 function formatMoney(value: number) {
   return `${Math.round(value).toLocaleString("en-US")}₮`;
 }
@@ -392,6 +590,12 @@ function formatMoney(value: number) {
 function getPatientName(appointment: DoctorAppointment) {
   const user = appointment.patient?.user;
   return `${user?.lastName || ""} ${user?.firstName || "Өвчтөн"}`.trim();
+}
+
+function formatBooleanNote(value?: boolean | null, note?: string | null) {
+  if (value === true) return note ? `Байгаа · ${note}` : "Байгаа";
+  if (value === false) return "Байхгүй";
+  return note || "Бүртгээгүй";
 }
 
 function buildAnalytics(appointments: DoctorAppointment[]) {

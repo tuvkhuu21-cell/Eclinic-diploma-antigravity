@@ -4,13 +4,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { FlaskConical, MessageCircle, Search, ShoppingCart, X } from "lucide-react";
+import { FlaskConical, ShoppingCart, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { PublicAuthModal } from "@/components/auth/PublicAuthModal";
 import { NotificationBox } from "@/components/notifications/NotificationBox";
 import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
 import { UserAvatarMenu } from "./UserAvatarMenu";
+import { ChatIconLink } from "@/components/chat/ChatIconLink";
 
 export function Navbar() {
   const { token, user, role, hasHydrated } = useAuthStore();
@@ -23,7 +24,6 @@ export function Navbar() {
   const isLoggedIn = Boolean(token && activeRole);
   const isPatient = activeRole === "PATIENT";
   const homeHref = activeRole === "DOCTOR" ? "/dashboard/doctor" : activeRole === "ADMIN" ? "/dashboard/admin" : "/";
-  const shouldHidePatientHomeHeader = hasHydrated && pathname === "/" && isLoggedIn && isPatient;
   const shouldHideDoctorAuthHeader = pathname === "/doctor/login" || pathname === "/doctor/register";
 
   useEffect(() => {
@@ -38,29 +38,23 @@ export function Navbar() {
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, []);
 
-  if (shouldHidePatientHomeHeader || shouldHideDoctorAuthHeader) return null;
+  if (shouldHideDoctorAuthHeader) return null;
 
   if (hasHydrated && isLoggedIn && isPatient) {
     return (
-      <header className="sticky top-0 z-40 rounded-b-[30px] bg-[#0b5b86] text-white shadow-[0_18px_52px_rgba(11,91,134,0.20)]">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-4 sm:flex-nowrap">
+      <header className="sticky top-0 z-40 border-b border-emerald-100 bg-white/95 text-navy shadow-[0_10px_30px_rgba(19,80,68,0.08)] backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-6 px-6 py-4 sm:flex-nowrap">
           <Link href="/" className="flex shrink-0 items-center gap-3">
-            <Image src="/logo/mediconnect.svg" alt="MediConnect" width={180} height={44} className="rounded-xl bg-white px-2 py-1 shadow-sm" priority />
+            <Image src="/logo/mediconnect.svg" alt="MediConnect" width={180} height={44} className="rounded-xl bg-white" priority />
           </Link>
-          <nav className="hidden items-center gap-8 text-sm font-bold text-white md:flex">
-            <Link href="/" className="transition hover:text-sky-100">Нүүр</Link>
-            <Link href="/appointments" className="transition hover:text-sky-100">Захиалга</Link>
+          <nav className="hidden items-center gap-8 text-sm font-bold text-slate-600 md:flex">
+            <Link href="/" className="border-b-2 border-medical pb-1 text-medical transition hover:text-medical">Нүүр</Link>
+            <Link href="/appointments" className="pb-1 transition hover:text-medical">Захиалга</Link>
           </nav>
-          <div className="ml-auto hidden min-w-64 items-center rounded-full bg-white px-4 py-3 text-slate-600 shadow-[0_14px_32px_rgba(8,47,73,0.14)] md:flex">
-            <Search size={17} className="text-[#0b6fa4]" />
-            <input className="ml-2 w-full bg-transparent text-sm outline-none" placeholder="Эмч, эмнэлэг хайх" />
-          </div>
-          <div className="ml-auto flex items-center gap-3 md:ml-0">
-            <Link href="/chat" className="grid h-11 w-11 place-items-center rounded-full border border-white/20 bg-white text-[#0b5b86] shadow-sm transition hover:bg-sky-50">
-              <MessageCircle size={19} />
-            </Link>
+          <div className="ml-auto flex items-center gap-3">
+            <ChatIconLink className="mediconnect-pill-icon" />
             <div ref={cartRef} className="relative">
-              <button type="button" aria-label="Package cart" className="relative grid h-11 w-11 place-items-center rounded-full border border-white/20 bg-white text-[#0b5b86] shadow-sm transition hover:bg-sky-50" onClick={() => setCartOpen((open) => !open)}>
+              <button type="button" aria-label="Package cart" className="mediconnect-pill-icon relative grid h-11 w-11 place-items-center rounded-full transition hover:bg-cyanSoft" onClick={() => setCartOpen((open) => !open)}>
                 <ShoppingCart size={19} />
                 {items.length > 0 && <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-rose-600 px-1 text-[11px] font-bold text-white">{items.length}</span>}
               </button>
@@ -91,8 +85,8 @@ export function Navbar() {
                 </div>
               )}
             </div>
-            <NotificationBox variant="dropdown" buttonClassName="h-11 w-11 border-white/20 bg-white text-[#0b5b86] shadow-sm hover:bg-sky-50" />
-            <UserAvatarMenu user={user} role={activeRole} buttonClassName="h-11 w-11 bg-white text-[#0b5b86] shadow-sm hover:bg-sky-50" />
+            <NotificationBox variant="dropdown" buttonClassName="h-11 w-11 bg-white text-medical shadow-sm hover:bg-cyanSoft" />
+            <UserAvatarMenu user={user} role={activeRole} buttonClassName="h-11 w-11 bg-white text-medical shadow-sm hover:bg-cyanSoft" />
           </div>
         </div>
       </header>
@@ -101,9 +95,9 @@ export function Navbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-slate-100 bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-emerald-100/70 bg-white/90 backdrop-blur-xl">
         {!(hasHydrated && isLoggedIn) && (
-          <div className="bg-slate-900 text-xs font-semibold text-slate-200">
+          <div className="bg-[#12312f] text-xs font-semibold text-emerald-50">
             <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-2">
               <div className="flex items-center gap-5">
                 <Link href="/doctor/login" className="hover:text-white">Эмч</Link>
@@ -118,15 +112,15 @@ export function Navbar() {
             </div>
           </div>
         )}
-        <div className="mx-auto flex max-w-7xl items-center gap-6 px-4 py-4">
+        <div className={`mx-auto flex max-w-7xl items-center gap-6 px-6 py-4 ${hasHydrated && isLoggedIn ? "text-navy" : ""}`}>
           <Link href={hasHydrated && isLoggedIn ? homeHref : "/"} className="flex shrink-0 items-center gap-3">
-            <Image src="/logo/mediconnect.svg" alt="MediConnect" width={180} height={44} priority />
+            <Image src="/logo/mediconnect.svg" alt="MediConnect" width={180} height={44} className={hasHydrated && isLoggedIn ? "rounded-xl bg-white" : ""} priority />
           </Link>
-          <nav className="hidden flex-1 items-center justify-center gap-7 text-sm font-semibold text-slate-700 lg:flex">
+          <nav className={`hidden flex-1 items-center justify-center gap-7 text-sm font-semibold lg:flex ${hasHydrated && isLoggedIn ? "text-slate-600" : "text-slate-700"}`}>
             {hasHydrated && isLoggedIn ? (
               <>
-                <Link href={homeHref} className="hover:text-medical">Нүүр</Link>
-                <Link href="/appointments" className="hover:text-medical">Захиалга</Link>
+                <Link href={homeHref} className="border-b-2 border-medical pb-1 text-medical">Нүүр</Link>
+                <Link href="/appointments" className="pb-1 hover:text-medical">Захиалга</Link>
               </>
             ) : (
               <>
@@ -135,17 +129,11 @@ export function Navbar() {
               </>
             )}
           </nav>
-          <div className="hidden min-w-52 items-center rounded-xl border border-slate-200 px-3 py-2 md:flex">
-            <Search size={16} className="text-medical" />
-            <input className="ml-2 w-full text-sm outline-none" placeholder="Хайх" />
-          </div>
           {hasHydrated && isLoggedIn && activeRole ? (
             <div className="ml-auto flex items-center gap-3 md:ml-0">
-              <Link href="/chat" className="grid h-11 w-11 place-items-center rounded-full border border-sky-100 bg-white text-navy shadow-sm transition hover:bg-cyanSoft">
-                <MessageCircle size={19} />
-              </Link>
-              <NotificationBox variant="dropdown" />
-              <UserAvatarMenu user={user} role={activeRole} />
+              <ChatIconLink className="mediconnect-pill-icon" />
+              <NotificationBox variant="dropdown" buttonClassName="mediconnect-pill-icon text-medical hover:bg-cyanSoft" />
+              <UserAvatarMenu user={user} role={activeRole} buttonClassName="bg-white text-medical hover:bg-cyanSoft" />
             </div>
           ) : (
             <div className="ml-auto hidden items-center gap-2 md:flex">

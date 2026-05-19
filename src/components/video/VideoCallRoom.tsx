@@ -23,12 +23,15 @@ type VideoMeta = {
   doctorId: string;
   roomId: string;
   status: "waiting" | "ringing" | "active" | "declined" | "ended";
+  startedAt?: string | null;
+  endedAt?: string | null;
   patient: { user: { firstName: string; lastName?: string } };
   doctor: { user: { firstName: string; lastName?: string }; online?: boolean };
   chatRoom?: { id: string } | null;
 };
 
 type ChatMessage = { id: string; content: string; senderId: string };
+type VideoChatMessage = ChatMessage & { createdAt?: string; status?: "sending" | "failed" };
 
 function getIceServers(): RTCIceServer[] {
   const servers: RTCIceServer[] = [
@@ -52,6 +55,8 @@ const iceServers: RTCConfiguration = {
   iceCandidatePoolSize: 8,
 };
 
+const RINGING_TIMEOUT_MS = 30_000;
+
 export function VideoCallRoom({ roomId }: { roomId: string }) {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
@@ -59,6 +64,8 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
+  const pendingIceRef = useRef<RTCIceCandidateInit[]>([]);
   const handledSignalsRef = useRef<Set<string>>(new Set());
   const handledSignalPayloadsRef = useRef<Set<string>>(new Set());
   const lastSignalAtRef = useRef("");
@@ -67,8 +74,13 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
   const startAfterAcceptRef = useRef(false);
   const startedRef = useRef(false);
   const acceptedRef = useRef(false);
+  const ringingTimeoutRef = useRef<number | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+  const shouldStickToBottomRef = useRef(true);
+  const initialChatLoadedRef = useRef(false);
   const [meta, setMeta] = useState<VideoMeta | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<VideoChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [micOn, setMicOn] = useState(true);
   const [cameraOn, setCameraOn] = useState(true);
@@ -87,8 +99,12 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
         setMeta(next);
         console.log("video-call: current status", { roomId: next.roomId, status: next.status, appointmentId: next.appointmentId, doctorId: next.doctorId, patientId: next.patientId });
         setStatus(next.status || "waiting");
-        if (next.status === "declined") setNotice("Дуудлагаас татгалзсан байна.");
-        if (next.status === "ended") setNotice("Дуудлага дууссан байна.");
+        if (next.status === "declined" || next.status === "ended") {
+          setNotice(next.status === "declined" ? "Дуудлагаас татгалзсан байна." : "Дуудлага дууссан байна.");
+          cleanup(next.status === "ended");
+          if (next.status === "declined") setStatus("declined");
+          window.setTimeout(() => router.replace("/chat"), 700);
+        }
       } catch {
         if (!cancelled) setNotice("Видео өрөөний мэдээлэл олдсонгүй.");
       }
@@ -97,7 +113,7 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [roomId]);
+  }, [roomId, router]);
 
   useEffect(() => {
     const accept = new URLSearchParams(window.location.search).get("accept") === "1";
@@ -117,6 +133,14 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
     }, 450);
     return () => window.clearInterval(timer);
   }, [roomId]);
+
+  useEffect(() => {
+    if (status === "ended" || status === "declined") return;
+    const timer = window.setInterval(() => {
+      void syncCallStatus();
+    }, 1500);
+    return () => window.clearInterval(timer);
+  }, [roomId, router, status]);
 
   useEffect(() => {
     const offerChannel = subscribeBroadcast<SignalMessage | { id?: string; payload?: SignalMessage["payload"] }>(`video-call-${roomId}`, "offer", (signal) => {
@@ -144,19 +168,27 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
       });
     });
     const statusChannel = subscribeBroadcast<{ roomId: string }>(`video-call-${roomId}`, "call-accepted", () => {
+      clearRingingTimeout();
       setStatus("active");
       setNotice("Дуудлага зөвшөөрөгдлөө. Холболт хийгдэж байна.");
       if (startAfterAcceptRef.current && !startedRef.current) void startCall();
     });
     const declinedChannel = subscribeBroadcast<{ roomId: string }>(`video-call-${roomId}`, "call-declined", () => {
+      clearRingingTimeout();
       setStatus("declined");
       setNotice("Дуудлагаас татгалзсан байна.");
+      cleanup(false);
+      setStatus("declined");
+      window.setTimeout(() => router.replace("/chat"), 700);
     });
     const endedChannel = subscribeBroadcast<{ roomId: string }>(`video-call-${roomId}`, "call-ended", () => {
+      clearRingingTimeout();
       cleanup(true);
       setNotice("Дуудлага дууссан байна.");
+      window.setTimeout(() => router.replace("/chat"), 700);
     });
     return () => {
+      clearRingingTimeout();
       removeRealtimeChannel(offerChannel);
       removeRealtimeChannel(answerChannel);
       removeRealtimeChannel(iceChannel);
@@ -164,7 +196,7 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
       removeRealtimeChannel(declinedChannel);
       removeRealtimeChannel(endedChannel);
     };
-  }, [roomId]);
+  }, [roomId, router]);
 
   useEffect(() => {
     if (!meta?.chatRoom?.id) return;
@@ -173,14 +205,17 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
     async function loadMessages() {
       try {
         const response = await api.get(`/chat/rooms/${chatRoomId}/messages`);
-        if (!cancelled) setMessages(response.data.data as ChatMessage[]);
+        if (!cancelled) {
+          initialChatLoadedRef.current = false;
+          setMessages(sortMessages(response.data.data as VideoChatMessage[]));
+        }
       } catch {
         if (!cancelled) setMessages([]);
       }
     }
     loadMessages();
     const channel = subscribeBroadcast<ChatMessage>(`chat-room-${chatRoomId}`, "new-message", (message) => {
-      setMessages((current) => [...current.filter((item) => item.id !== message.id), message]);
+      setMessages((current) => upsertMessages(current, message));
     });
     return () => {
       cancelled = true;
@@ -188,12 +223,31 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
     };
   }, [meta?.chatRoom?.id]);
 
-  useEffect(() => () => cleanup(false), []);
+  useEffect(() => {
+    const scrollElement = chatScrollRef.current;
+    if (!scrollElement) return;
+    const shouldScroll = !initialChatLoadedRef.current || shouldStickToBottomRef.current;
+    if (!shouldScroll) return;
+    const behavior: ScrollBehavior = initialChatLoadedRef.current ? "smooth" : "auto";
+    window.requestAnimationFrame(() => {
+      chatBottomRef.current?.scrollIntoView({ block: "end", behavior });
+      initialChatLoadedRef.current = true;
+    });
+  }, [messages.length, chatOpen]);
+
+  useEffect(() => () => {
+    clearRingingTimeout();
+    cleanup(false);
+  }, []);
 
   async function ringCall() {
     await api.patch("/video-calls", { roomId, status: "ringing" }).catch(() => null);
     setStatus("ringing");
     setNotice("Дуудлага илгээгдлээ. Нөгөө тал зөвшөөрөхийг хүлээж байна...");
+    clearRingingTimeout();
+    ringingTimeoutRef.current = window.setTimeout(() => {
+      void expireUnansweredCall();
+    }, RINGING_TIMEOUT_MS);
   }
 
   async function startCall() {
@@ -202,16 +256,14 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
     setNotice("");
     setPermissionError("");
     try {
-      const stream = await ensureLocalStream(createPeer());
       const peer = peerRef.current || createPeer();
-      stream.getTracks().forEach((track) => {
-        if (!peer.getSenders().some((sender) => sender.track === track)) peer.addTrack(track, stream);
-      });
+      await ensureLocalStream(peer);
       await tuneOutboundMedia(peer);
       await api.patch("/video-calls", { roomId, status: "active" }).catch(() => null);
-      const offer = await peer.createOffer();
-      await peer.setLocalDescription(offer);
-      await sendSignal("offer", offer);
+      const offer = await peer.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+      const lowLatencyOffer = optimizeAudioDescription(offer);
+      await peer.setLocalDescription(lowLatencyOffer);
+      await sendSignal("offer", lowLatencyOffer);
       setStatus("active");
       setNotice("Холболт хийгдэж байна...");
     } catch (error) {
@@ -248,20 +300,28 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
     if (signal.type === "offer") {
       await ensureLocalStream(peer);
       await peer.setRemoteDescription(new RTCSessionDescription(signal.payload as RTCSessionDescriptionInit));
+      await flushPendingIce(peer);
       const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      await sendSignal("answer", answer);
+      const lowLatencyAnswer = optimizeAudioDescription(answer);
+      await peer.setLocalDescription(lowLatencyAnswer);
+      await sendSignal("answer", lowLatencyAnswer);
       await api.patch("/video-calls", { roomId, status: "active" }).catch(() => null);
       setStatus("active");
       setNotice("Дуудлага холбогдож байна.");
     }
     if (signal.type === "answer" && peer.signalingState !== "stable") {
       await peer.setRemoteDescription(new RTCSessionDescription(signal.payload as RTCSessionDescriptionInit));
+      await flushPendingIce(peer);
       setStatus("active");
       setNotice("Дуудлага холбогдлоо.");
     }
     if (signal.type === "ice") {
-      await peer.addIceCandidate(new RTCIceCandidate(signal.payload as RTCIceCandidateInit)).catch(() => null);
+      const candidate = signal.payload as RTCIceCandidateInit;
+      if (!peer.remoteDescription) {
+        pendingIceRef.current.push(candidate);
+        return;
+      }
+      await peer.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => null);
     }
   }
 
@@ -282,17 +342,49 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
     try {
       const response = await api.get(`/video-calls/${roomId}`);
       const next = response.data.data as VideoMeta;
-      if (next.status === "active") void startCall();
+      if (next.status === "active") {
+        clearRingingTimeout();
+        void startCall();
+      }
       if (next.status === "declined") {
+        clearRingingTimeout();
         setStatus("declined");
         setNotice("Дуудлагаас татгалзсан байна.");
+        cleanup(false);
+        setStatus("declined");
+        window.setTimeout(() => router.replace("/chat"), 700);
       }
       if (next.status === "ended") {
+        clearRingingTimeout();
         cleanup(true);
         setNotice("Дуудлага дууссан байна.");
+        window.setTimeout(() => router.replace("/chat"), 700);
       }
     } catch {
       // Keep waiting quietly.
+    }
+  }
+
+  async function syncCallStatus() {
+    try {
+      const response = await api.get(`/video-calls/${roomId}`);
+      const next = response.data.data as VideoMeta;
+      if (next.status === "ended") {
+        clearRingingTimeout();
+        cleanup(true);
+        setNotice("Дуудлага дууссан байна.");
+        window.setTimeout(() => router.replace("/chat"), 500);
+      }
+      if (next.status === "declined") {
+        clearRingingTimeout();
+        setStatus("declined");
+        setNotice("Дуудлагаас татгалзсан байна.");
+        cleanup(false);
+        setStatus("declined");
+        window.setTimeout(() => router.replace("/chat"), 500);
+      }
+    } catch {
+      // Broadcast handles the fast path; polling is only a quiet safety net.
     }
   }
 
@@ -300,42 +392,10 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
     if (localStreamRef.current) return localStreamRef.current;
     if (isInsecureLan()) throw new Error("INSECURE_LAN_CONTEXT");
     if (!navigator.mediaDevices?.getUserMedia) throw new Error("MEDIA_UNSUPPORTED");
-    let stream: MediaStream | null = null;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280, max: 1920 },
-          height: { ideal: 720, max: 1080 },
-          frameRate: { ideal: 60, max: 60 },
-        },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          channelCount: { ideal: 1 },
-          sampleRate: { ideal: 48000 },
-        },
-      });
-    } catch (initialError) {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-        setCameraOn(false);
-        setMicOn(true);
-        setPermissionError("Камер ажиллахгүй байна. Одоогоор audio-only горимоор үргэлжилнэ.");
-      } catch {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-          setCameraOn(true);
-          setMicOn(false);
-          setPermissionError("Микрофон ажиллахгүй байна. Одоогоор video-only горимоор үргэлжилнэ.");
-        } catch {
-          throw initialError;
-        }
-      }
-    }
+    const stream = await createBestLocalStream();
     localStreamRef.current = stream;
     if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-    stream.getTracks().forEach((track) => peer.addTrack(track, stream));
+    await addLocalTracks(peer, stream);
     await tuneOutboundMedia(peer);
     return stream;
   }
@@ -353,7 +413,10 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
       }
     };
     peer.ontrack = (event) => {
-      const [stream] = event.streams;
+      if (event.track.kind === "audio") setReceiverLowLatency(event.receiver);
+      const stream = event.streams[0] || remoteStreamRef.current || new MediaStream();
+      if (!event.streams[0] && !stream.getTracks().some((track) => track.id === event.track.id)) stream.addTrack(event.track);
+      remoteStreamRef.current = stream;
       if (remoteVideoRef.current && stream) {
         remoteVideoRef.current.srcObject = stream;
         remoteVideoRef.current.play().catch(() => null);
@@ -386,7 +449,21 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
 
   async function tuneOutboundMedia(peer: RTCPeerConnection) {
     for (const sender of peer.getSenders()) {
+      if (sender.track?.kind === "audio") {
+        sender.track.contentHint = "speech";
+        const parameters = sender.getParameters();
+        const encoding = {
+          ...(parameters.encodings?.[0] || {}),
+          maxBitrate: 96_000,
+          networkPriority: "high",
+          priority: "high",
+        } as RTCRtpEncodingParameters & { networkPriority?: string; priority?: string };
+        parameters.encodings = [encoding];
+        await sender.setParameters(parameters).catch(() => null);
+        continue;
+      }
       if (sender.track?.kind !== "video") continue;
+      sender.track.contentHint = "motion";
       const parameters = sender.getParameters();
       parameters.encodings = [{
         ...(parameters.encodings?.[0] || {}),
@@ -397,6 +474,76 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
       }];
       parameters.degradationPreference = "balanced";
       await sender.setParameters(parameters).catch(() => null);
+    }
+  }
+
+  async function createBestLocalStream() {
+    const tracks: MediaStreamTrack[] = [];
+    let videoError: unknown = null;
+    let audioError: unknown = null;
+
+    try {
+      const videoStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 },
+          frameRate: { ideal: 30, max: 60 },
+        },
+        audio: false,
+      });
+      tracks.push(...videoStream.getVideoTracks());
+    } catch (error) {
+      videoError = error;
+    }
+
+    try {
+      const audioConstraints = {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: { ideal: 1 },
+        sampleRate: { ideal: 48000 },
+        latency: { ideal: 0 },
+      } as MediaTrackConstraints & { latency?: ConstrainDouble };
+      const audioStream = await navigator.mediaDevices.getUserMedia({
+        video: false,
+        audio: audioConstraints,
+      });
+      audioStream.getAudioTracks().forEach((track) => {
+        track.contentHint = "speech";
+      });
+      tracks.push(...audioStream.getAudioTracks());
+    } catch (error) {
+      audioError = error;
+    }
+
+    if (tracks.length === 0) throw videoError || audioError || new Error("MEDIA_UNSUPPORTED");
+
+    const stream = new MediaStream(tracks);
+    const hasVideo = stream.getVideoTracks().length > 0;
+    const hasAudio = stream.getAudioTracks().length > 0;
+    setCameraOn(hasVideo);
+    setMicOn(hasAudio);
+    if (!hasVideo && hasAudio) setPermissionError("Камер ажиллахгүй байна. Одоогоор audio-only горимоор үргэлжилнэ.");
+    if (hasVideo && !hasAudio) setPermissionError("Микрофон ажиллахгүй байна. Одоогоор video-only горимоор үргэлжилнэ.");
+    if (hasVideo && hasAudio) setPermissionError("");
+    return stream;
+  }
+
+  async function addLocalTracks(peer: RTCPeerConnection, stream: MediaStream) {
+    for (const track of stream.getTracks()) {
+      const existingSender = peer.getSenders().find((sender) => sender.track?.id === track.id);
+      if (existingSender) continue;
+      peer.addTrack(track, stream);
+    }
+  }
+
+  async function flushPendingIce(peer: RTCPeerConnection) {
+    if (!peer.remoteDescription || pendingIceRef.current.length === 0) return;
+    const candidates = [...pendingIceRef.current];
+    pendingIceRef.current = [];
+    for (const candidate of candidates) {
+      await peer.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => null);
     }
   }
 
@@ -413,20 +560,55 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
   }
 
   async function endCall() {
-    await api.patch("/video-calls", { roomId, status: "ended" }).catch(() => null);
+    clearRingingTimeout();
+    const endedAt = new Date();
+    const response = await api.patch("/video-calls", { roomId, status: "ended" }).catch(() => null);
+    const updated = response?.data?.data as VideoMeta | undefined;
+    const startedAt = updated?.startedAt || meta?.startedAt;
+    await recordCallEndedMessage({
+      endedAt,
+      durationSeconds: startedAt ? Math.max(1, Math.round((endedAt.getTime() - new Date(startedAt).getTime()) / 1000)) : undefined,
+    });
     await broadcastRealtime(`video-call-${roomId}`, "call-ended", { roomId, userId: user?.id });
     cleanup(true);
-    router.push("/chat");
+    router.replace("/chat");
+  }
+
+  async function recordCallEndedMessage({ endedAt, durationSeconds }: { endedAt: Date; durationSeconds?: number }) {
+    if (!meta?.chatRoom?.id) return;
+    const content = JSON.stringify({
+      type: "video-call-ended",
+      text: `Видео дуудлага дууслаа · ${formatClock(endedAt)}`,
+      endedAt: endedAt.toISOString(),
+      durationSeconds,
+      roomId,
+    });
+    try {
+      const response = await api.post("/chat/messages", { roomId: meta.chatRoom.id, content });
+      const saved = response.data.data as ChatMessage;
+      setMessages((current) => [...current.filter((item) => item.id !== saved.id), saved]);
+      await broadcastRealtime(`chat-room-${meta.chatRoom.id}`, "new-message", saved);
+    } catch {
+      // Ending the call should never be blocked by chat history persistence.
+    }
   }
 
   async function sendMessage() {
     const content = draft.trim();
     if (!content || !meta?.chatRoom?.id) return;
-    const response = await api.post("/chat/messages", { roomId: meta.chatRoom.id, content });
-    const saved = response.data.data as ChatMessage;
-    setMessages((current) => [...current, saved]);
-    await broadcastRealtime(`chat-room-${meta.chatRoom.id}`, "new-message", saved);
+    const tempId = `temp-${crypto.randomUUID()}`;
+    const optimistic: VideoChatMessage = { id: tempId, content, senderId: user?.id || "me", createdAt: new Date().toISOString(), status: "sending" };
     setDraft("");
+    shouldStickToBottomRef.current = true;
+    setMessages((current) => upsertMessages(current, optimistic));
+    try {
+      const response = await api.post("/chat/messages", { roomId: meta.chatRoom.id, content });
+      const saved = response.data.data as ChatMessage;
+      setMessages((current) => upsertMessages(current.filter((item) => item.id !== tempId), saved));
+      await broadcastRealtime(`chat-room-${meta.chatRoom.id}`, "new-message", saved);
+    } catch {
+      setMessages((current) => current.map((item) => item.id === tempId ? { ...item, status: "failed" } : item));
+    }
   }
 
   async function sendAttachment(event: ChangeEvent<HTMLInputElement>) {
@@ -437,11 +619,27 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
     data.append("file", file);
     const uploadResponse = await api.post("/chat/upload", data, { headers: { "Content-Type": "multipart/form-data" } });
     const attachment = uploadResponse.data.data as { url: string; name: string; mimeType: string; size: number };
-    const response = await api.post("/chat/messages", { roomId: meta.chatRoom.id, content: JSON.stringify({ text: draft.trim(), attachment }) });
-    const saved = response.data.data as ChatMessage;
-    setMessages((current) => [...current, saved]);
-    await broadcastRealtime(`chat-room-${meta.chatRoom.id}`, "new-message", saved);
-    setDraft("");
+    const content = JSON.stringify({ text: draft.trim(), attachment });
+    const tempId = `temp-${crypto.randomUUID()}`;
+    const optimistic: VideoChatMessage = { id: tempId, content, senderId: user?.id || "me", createdAt: new Date().toISOString(), status: "sending" };
+    shouldStickToBottomRef.current = true;
+    setMessages((current) => upsertMessages(current, optimistic));
+    try {
+      const response = await api.post("/chat/messages", { roomId: meta.chatRoom.id, content });
+      const saved = response.data.data as ChatMessage;
+      setMessages((current) => upsertMessages(current.filter((item) => item.id !== tempId), saved));
+      await broadcastRealtime(`chat-room-${meta.chatRoom.id}`, "new-message", saved);
+      setDraft("");
+    } catch {
+      setMessages((current) => current.map((item) => item.id === tempId ? { ...item, status: "failed" } : item));
+    }
+  }
+
+  function handleChatScroll() {
+    const element = chatScrollRef.current;
+    if (!element) return;
+    const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+    shouldStickToBottomRef.current = distanceFromBottom < 140;
   }
 
   function cleanup(markEnded: boolean) {
@@ -449,6 +647,8 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
     acceptedRef.current = false;
     peerRef.current?.close();
     peerRef.current = null;
+    remoteStreamRef.current = null;
+    pendingIceRef.current = [];
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
     localStreamRef.current = null;
     if (localVideoRef.current) localVideoRef.current.srcObject = null;
@@ -457,6 +657,39 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
       setStatus("ended");
       setNotice("Дуудлага дууслаа.");
     }
+  }
+
+  function clearRingingTimeout() {
+    if (!ringingTimeoutRef.current) return;
+    window.clearTimeout(ringingTimeoutRef.current);
+    ringingTimeoutRef.current = null;
+  }
+
+  async function expireUnansweredCall() {
+    if (startedRef.current || acceptedRef.current) return;
+    try {
+      const response = await api.get(`/video-calls/${roomId}`);
+      const currentStatus = response.data.data?.status;
+      if (currentStatus === "active") {
+        clearRingingTimeout();
+        setStatus("active");
+        if (!startedRef.current && startAfterAcceptRef.current) void startCall();
+        return;
+      }
+      if (currentStatus === "declined" || currentStatus === "ended") {
+        clearRingingTimeout();
+        cleanup(currentStatus === "ended");
+        router.replace("/chat");
+        return;
+      }
+    } catch {
+      // If the status check fails, keep the old timeout behavior.
+    }
+    await api.patch("/video-calls", { roomId, status: "ended" }).catch(() => null);
+    await broadcastRealtime(`video-call-${roomId}`, "call-ended", { roomId, userId: user?.id });
+    cleanup(true);
+    setNotice("Дуудлага хариу өгөөгүй тул дууслаа.");
+    router.replace("/chat");
   }
 
   const otherName = user?.role === "DOCTOR"
@@ -516,10 +749,11 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
                 <X size={18} />
               </button>
             </div>
-            <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto bg-white px-5 py-4 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin]">
+            <div ref={chatScrollRef} onScroll={handleChatScroll} className="video-call-chat-scroll flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto bg-white px-5 py-4 [scrollbar-color:#9fb7c7_#f8fafc] [scrollbar-width:thin]">
               <div className="mt-auto" />
-              {messages.map((message) => <MessageBubble key={message.id} mine={message.senderId === user?.id} text={message.content} />)}
+              {messages.map((message) => <MessageBubble key={message.id} mine={message.senderId === user?.id} text={message.content} status={message.status} />)}
               {messages.length === 0 && <p className="rounded-2xl bg-[#f0f2f5] p-4 text-sm font-semibold text-slate-600">Чатад зурвас алга.</p>}
+              <div ref={chatBottomRef} className="h-1 shrink-0" />
             </div>
             <div className="flex items-center gap-2 border-t border-slate-200 bg-white p-3">
               <input ref={fileInputRef} type="file" className="hidden" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={sendAttachment} />
@@ -552,6 +786,89 @@ function getMediaErrorMessage(error: unknown) {
   if (name === "OverconstrainedError") return "Сонгосон камер/микрофон тохиргоо дэмжигдэхгүй байна.";
   if (name === "SecurityError" || name === "MEDIA_UNSUPPORTED") return "Энэ browser эсвэл холболт camera/mic ашиглахыг зөвшөөрөхгүй байна. LAN IP дээр HTTP ашиглаж байгаа бол Chrome camera/mic-ийг хориглодог. Localhost эсвэл HTTPS ашиглаарай.";
   return "Камер/микрофон зөвшөөрөл авахад алдаа гарлаа. Browser permission болон төхөөрөмжөө шалгаад дахин оролдоно уу.";
+}
+
+function formatClock(date: Date) {
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const period = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12 || 12;
+  return `${hours}:${minutes} ${period}`;
+}
+
+function optimizeAudioDescription(description: RTCSessionDescriptionInit) {
+  if (!description.sdp) return description;
+  const lines = description.sdp.split("\r\n");
+  const opusLine = lines.find((line) => line.startsWith("a=rtpmap:") && line.toLowerCase().includes("opus/48000"));
+  const opusPayload = opusLine?.match(/^a=rtpmap:(\d+)\s/i)?.[1];
+  if (!opusPayload) return description;
+
+  const nextLines: string[] = [];
+  let audioSection = false;
+  let addedAudioTiming = false;
+  let patchedFmtp = false;
+
+  for (const line of lines) {
+    if (line.startsWith("m=")) {
+      if (audioSection && !addedAudioTiming) {
+        nextLines.push("a=ptime:10", "a=maxptime:20");
+      }
+      audioSection = line.startsWith("m=audio");
+      addedAudioTiming = false;
+    }
+
+    if (audioSection && line.startsWith(`a=fmtp:${opusPayload}`)) {
+      const suffix = line.includes(" ") ? line.split(" ").slice(1).join(" ") : "";
+      const params = new Set(
+        suffix
+          .split(";")
+          .map((value) => value.trim())
+          .filter(Boolean),
+      );
+      params.add("minptime=10");
+      params.add("useinbandfec=1");
+      params.add("usedtx=0");
+      params.add("maxaveragebitrate=96000");
+      nextLines.push(`a=fmtp:${opusPayload} ${Array.from(params).join(";")}`);
+      patchedFmtp = true;
+      continue;
+    }
+
+    if (audioSection && line.startsWith("a=ptime:")) {
+      nextLines.push("a=ptime:10");
+      addedAudioTiming = true;
+      continue;
+    }
+
+    if (audioSection && line.startsWith("a=maxptime:")) {
+      nextLines.push("a=maxptime:20");
+      continue;
+    }
+
+    nextLines.push(line);
+  }
+
+  if (audioSection && !addedAudioTiming) nextLines.push("a=ptime:10", "a=maxptime:20");
+  if (!patchedFmtp) return { ...description, sdp: nextLines.join("\r\n") };
+  return { ...description, sdp: nextLines.join("\r\n") };
+}
+
+function setReceiverLowLatency(receiver: RTCRtpReceiver) {
+  const lowLatencyReceiver = receiver as RTCRtpReceiver & { jitterBufferTarget?: number };
+  if ("jitterBufferTarget" in lowLatencyReceiver) lowLatencyReceiver.jitterBufferTarget = 0.05;
+}
+
+function upsertMessages(current: VideoChatMessage[], message: VideoChatMessage) {
+  return sortMessages([...current.filter((item) => item.id !== message.id), message]);
+}
+
+function sortMessages(messages: VideoChatMessage[]) {
+  return [...messages].sort((left, right) => {
+    const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+    const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+    if (leftTime !== rightTime) return leftTime - rightTime;
+    return left.id.localeCompare(right.id);
+  });
 }
 
 function isInsecureLan() {

@@ -97,15 +97,15 @@ export default function AdminDashboardPage() {
   ];
 
   return (
-    <section className="min-h-screen bg-[#f3f8fc] px-4 py-8">
+    <section className="min-h-screen bg-[#f2faf6] px-4 py-8">
       <div className="mx-auto max-w-7xl">
-        <div className="rounded-[30px] bg-gradient-to-br from-[#0b5b86] to-[#19b9d2] p-6 text-white shadow-[0_20px_60px_rgba(11,91,134,0.22)]">
-          <p className="text-sm font-bold text-cyan-50">MediConnect Admin</p>
+        <div className="rounded-[34px] bg-gradient-to-br from-[#237b68] via-[#2f917b] to-[#8fd8bf] p-6 text-white shadow-[0_20px_60px_rgba(25,105,89,0.22)]">
+          <p className="text-sm font-bold text-emerald-50">MediConnect Admin</p>
           <h1 className="mt-2 text-3xl font-extrabold">Админы самбар</h1>
-          <p className="mt-2 text-sm font-semibold text-cyan-50">Хэрэглэгч, эмч, захиалга, орлогын бодит DB мэдээлэл.</p>
+          <p className="mt-2 text-sm font-semibold text-emerald-50">Хэрэглэгч, эмч, захиалга, орлогын бодит DB мэдээлэл.</p>
         </div>
 
-        <div className="mt-6 flex max-w-xl items-center rounded-2xl border border-sky-100 bg-white px-4 py-3 shadow-soft">
+        <div className="mt-6 flex max-w-xl items-center rounded-full border border-emerald-100 bg-white px-4 py-3 shadow-soft">
           <Search size={18} className="text-medical" />
           <input className="ml-3 w-full bg-transparent text-sm outline-none" placeholder="Хэрэглэгч, эмч, имэйл, утас хайх..." value={search} onChange={(event) => setSearch(event.target.value)} />
         </div>
@@ -135,7 +135,7 @@ export default function AdminDashboardPage() {
           <div className="mt-6 grid gap-6">
             <AdminTable title="Хэрэглэгчид" columns={["Нэр", "И-мэйл", "Role", "Утас", "Бүртгэсэн", "Төлөв"]}>
               {filteredUsers.map((user) => (
-                <tr key={user.id} className="border-t border-sky-50">
+                <tr key={user.id} className="border-t border-emerald-50">
                   <Td>{`${user.lastName || ""} ${user.firstName}`.trim()}</Td>
                   <Td>{user.email}</Td>
                   <Td><Badge>{user.role}</Badge></Td>
@@ -149,7 +149,7 @@ export default function AdminDashboardPage() {
 
             <AdminTable title="Эмч нар" columns={["Эмч", "Мэргэжил", "Хүйс", "Утас / И-мэйл", "Төлөв", "Нийт цаг", "Өнөөдөр"]}>
               {filteredDoctors.map((doctor) => (
-                <tr key={doctor.id} className="border-t border-sky-50">
+                <tr key={doctor.id} className="border-t border-emerald-50">
                   <Td>{doctor.name}</Td>
                   <Td>{doctor.specialty}</Td>
                   <Td>{doctor.gender || "-"}</Td>
@@ -164,7 +164,7 @@ export default function AdminDashboardPage() {
 
             <AdminTable title="Өнөөдрийн захиалгууд" columns={["Өвчтөн", "Эмч", "Эмнэлэг", "Төрөл", "Цаг", "Төлбөр", "Төлөв"]}>
               {data.todayAppointments.map((appointment) => (
-                <tr key={appointment.id} className="border-t border-sky-50">
+                <tr key={appointment.id} className="border-t border-emerald-50">
                   <Td>{appointment.patientName}</Td>
                   <Td>{appointment.doctorName}</Td>
                   <Td>{appointment.hospitalName || "-"}</Td>
@@ -186,12 +186,12 @@ export default function AdminDashboardPage() {
 function AdminTable({ title, columns, children }: { title: string; columns: string[]; children: React.ReactNode }) {
   return (
     <Card className="overflow-hidden p-0">
-      <div className="border-b border-sky-100 px-5 py-4">
+      <div className="border-b border-emerald-100 px-5 py-4">
         <h2 className="text-lg font-extrabold text-navy">{title}</h2>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[860px] text-left text-sm">
-          <thead className="bg-sky-50 text-xs uppercase text-slate-500">
+          <thead className="bg-emerald-50 text-xs uppercase text-slate-500">
             <tr>{columns.map((column) => <th key={column} className="px-4 py-3 font-extrabold">{column}</th>)}</tr>
           </thead>
           <tbody className="bg-white text-slate-700">{children}</tbody>

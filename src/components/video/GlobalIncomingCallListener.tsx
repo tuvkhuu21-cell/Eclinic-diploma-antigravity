@@ -7,6 +7,16 @@ import { broadcastRealtime, removeRealtimeChannel, subscribeBroadcast } from "@/
 import { useAuthStore } from "@/store/auth.store";
 import { api } from "@/services/api";
 
+const RINGING_TIMEOUT_MS = 30_000;
+
+type RingtoneNode = {
+  oscillator: OscillatorNode;
+  gain: GainNode;
+  context: AudioContext;
+};
+
+const activeRingtones = new Set<RingtoneNode>();
+
 type IncomingVideoCall = {
   roomId: string;
   appointmentId?: string;
@@ -24,6 +34,8 @@ export function GlobalIncomingCallListener() {
   const oscillatorRef = useRef<OscillatorNode | null>(null);
   const gainRef = useRef<GainNode | null>(null);
   const audioRef = useRef<AudioContext | null>(null);
+  const timeoutRef = useRef<number | null>(null);
+  const ignoredRoomIdsRef = useRef<Set<string>>(new Set());
   const userId = user?.id ?? null;
   const enabled = Boolean(userId);
   const isVideoPage = pathname?.startsWith("/video-call");
@@ -31,8 +43,16 @@ export function GlobalIncomingCallListener() {
   const callerName = useMemo(() => incoming?.callerName || "MediConnect хэрэглэгч", [incoming?.callerName]);
 
   useEffect(() => {
+    if (!isVideoPage) return;
+    stopAllRingtones();
+    setIncoming(null);
+  }, [isVideoPage]);
+
+  useEffect(() => {
     if (!enabled || !userId || isVideoPage) return;
     const channel = subscribeBroadcast<IncomingVideoCall>(`user-notifications-${userId}`, "incoming-video-call", (payload) => {
+      if (payload.callerId && payload.callerId === userId) return;
+      if (ignoredRoomIdsRef.current.has(payload.roomId)) return;
       setIncoming(payload);
     });
     return () => removeRealtimeChannel(channel);
@@ -41,12 +61,13 @@ export function GlobalIncomingCallListener() {
   useEffect(() => {
     if (!enabled || !userId || isVideoPage || incoming) return;
     let cancelled = false;
+
     async function checkIncomingCall() {
       try {
         const response = await api.get("/video-calls", { params: { status: "ringing" } });
         if (cancelled) return;
-        const calls = response.data.data as IncomingVideoCall[];
-        const call = calls.find((item) => item.roomId);
+        const calls = (response.data.data || []) as IncomingVideoCall[];
+        const call = calls.find((item) => item.roomId && !ignoredRoomIdsRef.current.has(item.roomId));
         if (!call) return;
         const caller = user?.role === "DOCTOR" ? call.patient?.user : call.doctor?.user;
         setIncoming({
@@ -55,16 +76,29 @@ export function GlobalIncomingCallListener() {
           callerName: `${caller?.lastName || ""} ${caller?.firstName || ""}`.trim() || "MediConnect хэрэглэгч",
         });
       } catch {
-        // Keep the listener quiet during transient LAN/API failures.
+        // Keep the fallback quiet during LAN/API hiccups.
       }
     }
+
     void checkIncomingCall();
-    const timer = window.setInterval(checkIncomingCall, 2000);
+    const timer = window.setInterval(checkIncomingCall, 2_000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
   }, [enabled, userId, isVideoPage, incoming, user?.role]);
+
+  useEffect(() => {
+    if (!incoming) return;
+    if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
+    timeoutRef.current = window.setTimeout(() => {
+      void expireIncomingCall(incoming.roomId);
+    }, RINGING_TIMEOUT_MS);
+    return () => {
+      if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    };
+  }, [incoming?.roomId]);
 
   useEffect(() => {
     if (!incoming) {
@@ -77,19 +111,44 @@ export function GlobalIncomingCallListener() {
 
   async function acceptCall() {
     if (!incoming) return;
+    const roomId = incoming.roomId;
+    ignoredRoomIdsRef.current.add(roomId);
     stopRingtone();
-    await api.patch("/video-calls", { roomId: incoming.roomId, status: "active" }).catch(() => null);
-    await broadcastRealtime(`video-call-${incoming.roomId}`, "call-accepted", { roomId: incoming.roomId, userId });
-    router.push(`/video-call/${incoming.roomId}?accept=1`);
+    if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
     setIncoming(null);
+    await api.patch("/video-calls", { roomId, status: "active" }).catch(() => null);
+    await broadcastRealtime(`video-call-${roomId}`, "call-accepted", { roomId, userId });
+    router.push(`/video-call/${roomId}?accept=1`);
   }
 
   async function declineCall() {
     if (!incoming) return;
+    const roomId = incoming.roomId;
+    ignoredRoomIdsRef.current.add(roomId);
     stopRingtone();
-    await api.patch("/video-calls", { roomId: incoming.roomId, status: "declined" }).catch(() => null);
-    await broadcastRealtime(`video-call-${incoming.roomId}`, "call-declined", { roomId: incoming.roomId, userId });
+    if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
     setIncoming(null);
+    await api.patch("/video-calls", { roomId, status: "declined" }).catch(() => null);
+    await broadcastRealtime(`video-call-${roomId}`, "call-declined", { roomId, userId });
+  }
+
+  async function expireIncomingCall(roomId: string) {
+    try {
+      const response = await api.get(`/video-calls/${roomId}`);
+      const currentStatus = response.data.data?.status;
+      if (currentStatus === "active" || currentStatus === "ended" || currentStatus === "declined") {
+        ignoredRoomIdsRef.current.add(roomId);
+        setIncoming((current) => current?.roomId === roomId ? null : current);
+        stopRingtone();
+        return;
+      }
+      await api.patch("/video-calls", { roomId, status: "ended" }).catch(() => null);
+    } catch {
+      await api.patch("/video-calls", { roomId, status: "ended" }).catch(() => null);
+    }
+    ignoredRoomIdsRef.current.add(roomId);
+    setIncoming((current) => current?.roomId === roomId ? null : current);
+    stopRingtone();
   }
 
   function startRingtone() {
@@ -98,6 +157,7 @@ export function GlobalIncomingCallListener() {
       if (!AudioCtor || oscillatorRef.current) return;
       const context = audioRef.current || new AudioCtor();
       audioRef.current = context;
+      if (context.state === "suspended") void context.resume().catch(() => null);
       const oscillator = context.createOscillator();
       const gain = context.createGain();
       oscillator.type = "sine";
@@ -108,21 +168,17 @@ export function GlobalIncomingCallListener() {
       oscillator.start();
       oscillatorRef.current = oscillator;
       gainRef.current = gain;
+      activeRingtones.add({ oscillator, gain, context });
     } catch {
       // Browser may block audio before user interaction; popup remains visible.
     }
   }
 
   function stopRingtone() {
-    try {
-      oscillatorRef.current?.stop();
-      oscillatorRef.current?.disconnect();
-      gainRef.current?.disconnect();
-    } catch {
-      // Already stopped.
-    }
+    stopAllRingtones();
     oscillatorRef.current = null;
     gainRef.current = null;
+    audioRef.current = null;
   }
 
   if (!incoming) return null;
@@ -149,4 +205,23 @@ export function GlobalIncomingCallListener() {
       </div>
     </div>
   );
+}
+
+function stopAllRingtones() {
+  for (const node of Array.from(activeRingtones)) {
+    try {
+      node.gain.gain.value = 0;
+      node.oscillator.stop();
+    } catch {
+      // Already stopped.
+    }
+    try {
+      node.oscillator.disconnect();
+      node.gain.disconnect();
+    } catch {
+      // Already disconnected.
+    }
+    if (node.context.state !== "closed") void node.context.close().catch(() => null);
+    activeRingtones.delete(node);
+  }
 }

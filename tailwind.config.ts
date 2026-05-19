@@ -5,12 +5,12 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        navy: "#0B1F3A",
-        medical: "#0EA5E9",
-        cyanSoft: "#E6F7FB",
+        navy: "#12312f",
+        medical: "#237b68",
+        cyanSoft: "#e8f6ef",
       },
       boxShadow: {
-        soft: "0 18px 45px rgba(15, 23, 42, 0.08)",
+        soft: "0 18px 45px rgba(25, 105, 89, 0.10)",
       },
     },
   },
@@ -18,4 +18,3 @@ const config: Config = {
 };
 
 export default config;
-

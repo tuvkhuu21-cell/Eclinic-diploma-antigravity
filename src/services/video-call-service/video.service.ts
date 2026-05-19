@@ -2,12 +2,25 @@ import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/errors";
 
 const closedStatuses = new Set(["ended", "declined"]);
+const RINGING_TIMEOUT_MS = 30_000;
 
 export const videoService = {
   async incoming(userId: string) {
+    const ringingCutoff = new Date(Date.now() - RINGING_TIMEOUT_MS);
+    await prisma.videoCall.updateMany({
+      where: {
+        status: "ringing",
+        OR: [
+          { startedAt: null },
+          { startedAt: { lt: ringingCutoff } },
+        ],
+      },
+      data: { status: "ended", endedAt: new Date() },
+    });
     const calls = await prisma.videoCall.findMany({
       where: {
         status: "ringing",
+        startedAt: { gte: ringingCutoff },
         OR: [{ patient: { userId } }, { doctor: { userId } }],
       },
       include: {
@@ -80,7 +93,7 @@ export const videoService = {
       where: { roomId },
       data: {
         status,
-        startedAt: status === "active" ? new Date() : undefined,
+        startedAt: status === "active" || status === "ringing" ? new Date() : status === "waiting" ? null : undefined,
         endedAt: status === "ended" || status === "declined" ? new Date() : undefined,
       },
     });

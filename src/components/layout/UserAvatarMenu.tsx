@@ -65,14 +65,14 @@ export function UserAvatarMenu({ user, role, buttonClassName }: { user?: AuthUse
       <button
         type="button"
         aria-label="User menu"
-        className={cn("grid h-11 w-11 place-items-center rounded-full bg-medical text-sm font-extrabold text-white shadow-sm ring-2 ring-white/70 transition hover:scale-[1.03] hover:bg-sky-600", buttonClassName)}
+        className={cn("grid h-11 w-11 place-items-center rounded-full bg-medical text-sm font-extrabold text-white shadow-sm ring-2 ring-white/70 transition hover:scale-[1.03] hover:bg-[#1d6758]", buttonClassName)}
         onClick={() => setOpen((current) => !current)}
       >
         {initials}
       </button>
       {open && (
-        <div className="absolute right-0 top-[calc(100%+12px)] z-[130] w-[min(330px,calc(100vw-1.5rem))] overflow-hidden rounded-3xl border border-sky-100 bg-white shadow-[0_24px_70px_rgba(14,165,233,0.24)] ring-1 ring-white">
-          <Link href={profileHref} onClick={() => setOpen(false)} className="flex items-center gap-3 border-b border-sky-100 bg-gradient-to-br from-cyanSoft to-white px-4 py-4 text-left transition hover:from-sky-50 hover:to-cyanSoft">
+        <div className="absolute right-0 top-[calc(100%+12px)] z-[130] w-[min(330px,calc(100vw-1.5rem))] overflow-hidden rounded-3xl border border-emerald-100 bg-white shadow-[0_24px_70px_rgba(25,105,89,0.20)] ring-1 ring-white">
+          <Link href={profileHref} onClick={() => setOpen(false)} className="flex items-center gap-3 border-b border-emerald-100 bg-gradient-to-br from-cyanSoft to-white px-4 py-4 text-left transition hover:from-emerald-50 hover:to-cyanSoft">
             <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-medical font-extrabold text-white shadow-sm">{initials}</div>
             <div className="min-w-0">
               <p className="truncate font-bold text-navy">{fullName}</p>
@@ -82,12 +82,12 @@ export function UserAvatarMenu({ user, role, buttonClassName }: { user?: AuthUse
           <div className="max-h-[min(70vh,560px)] overflow-y-auto py-2">
             {menuItems.map(({ label, href, icon: Icon }) => (
               <Link key={label} href={href} onClick={() => setOpen(false)} className="mx-2 flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-cyanSoft hover:text-medical">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-sky-50 text-medical"><Icon size={16} /></span>
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-emerald-50 text-medical"><Icon size={16} /></span>
                 {label}
               </Link>
             ))}
             <button type="button" onClick={handleLogout} className="mx-2 flex w-[calc(100%-1rem)] items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold text-slate-700 transition hover:bg-cyanSoft hover:text-medical">
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-sky-50 text-medical"><LogOut size={16} /></span>
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-emerald-50 text-medical"><LogOut size={16} /></span>
               Системээс гарах
             </button>
           </div>

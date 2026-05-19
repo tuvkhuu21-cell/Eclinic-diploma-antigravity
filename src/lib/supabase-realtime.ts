@@ -5,10 +5,18 @@ let missingEnvLogged = false;
 const missingEnvMessage = "Supabase environment variables are missing";
 
 function getBrowserSupabaseEnv() {
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    || process.env.NEXT_PUBLIC_SUPABASE_PROJECT_URL;
   return {
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    publishableKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    url: normalizeSupabaseUrl(rawUrl),
+    publishableKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+      || process.env.NEXT_PUBLIC_SUPABASE_KEY,
   };
+}
+
+function normalizeSupabaseUrl(url?: string) {
+  return url?.replace(/\/rest\/v1\/?$/, "").replace(/\/+$/, "");
 }
 
 function logMissingSupabaseEnv() {

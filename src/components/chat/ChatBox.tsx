@@ -31,6 +31,8 @@ type ChatMessage = {
   status?: "sending" | "failed";
 };
 
+const emojiOptions = ["😀", "😄", "😊", "😍", "🥰", "😂", "😎", "🤔", "👍", "👏", "🙏", "💪", "❤️", "💙", "💚", "✨", "🔥", "🎉", "😷", "🤒", "💊", "🩺", "🏥", "✅"];
+
 export function ChatBox() {
   const user = useAuthStore((state) => state.user);
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
@@ -42,9 +44,21 @@ export function ChatBox() {
   const [unreadRoomIds, setUnreadRoomIds] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const messageInputRef = useRef<HTMLInputElement>(null);
+  const emojiRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const initialScrollDoneRef = useRef(false);
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!emojiRef.current?.contains(event.target as Node)) setEmojiOpen(false);
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, []);
 
   useEffect(() => {
     let firstLoad = true;
@@ -132,7 +146,10 @@ export function ChatBox() {
     if (!element) return;
     const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
     if (!initialScrollDoneRef.current || distanceFromBottom < 180) {
-      element.scrollTop = element.scrollHeight;
+      window.requestAnimationFrame(() => {
+        element.scrollTop = element.scrollHeight;
+        messagesEndRef.current?.scrollIntoView({ block: "end" });
+      });
       initialScrollDoneRef.current = true;
     }
   }, [messages]);
@@ -218,6 +235,23 @@ export function ChatBox() {
     }
   }
 
+  function insertEmoji(emoji: string) {
+    const input = messageInputRef.current;
+    if (!input) {
+      setDraft((current) => `${current}${emoji}`);
+      return;
+    }
+    const start = input.selectionStart ?? draft.length;
+    const end = input.selectionEnd ?? draft.length;
+    const next = `${draft.slice(0, start)}${emoji}${draft.slice(end)}`;
+    setDraft(next);
+    window.requestAnimationFrame(() => {
+      input.focus();
+      const cursor = start + emoji.length;
+      input.setSelectionRange(cursor, cursor);
+    });
+  }
+
   async function startVideoCall() {
     if (!activeRoom?.appointment) return;
     const response = await api.post("/video-calls", {
@@ -246,23 +280,23 @@ export function ChatBox() {
   }
 
   return (
-    <div className="mx-auto grid h-[calc(100vh-110px)] min-h-[680px] max-w-[1480px] overflow-hidden rounded-2xl bg-white shadow-[0_18px_60px_rgba(15,23,42,0.08)] lg:grid-cols-[360px_minmax(520px,1fr)]">
-        <aside className="hidden min-h-0 flex-col border-r border-slate-200 bg-white lg:flex">
-          <div className="border-b border-slate-100 p-5">
+    <div className="mx-auto grid h-[calc(100vh-110px)] min-h-[680px] max-w-[1480px] overflow-hidden rounded-[30px] border border-emerald-100 bg-white shadow-[0_20px_70px_rgba(25,105,89,0.12)] lg:grid-cols-[360px_minmax(520px,1fr)]">
+        <aside className="hidden min-h-0 flex-col border-r border-emerald-100 bg-white lg:flex">
+          <div className="border-b border-emerald-100 p-5">
             <div className="flex items-center justify-between">
               <h1 className="text-3xl font-black tracking-tight text-slate-950">Chats</h1>
               <div className="flex gap-2">
-                <button type="button" className="grid h-11 w-11 place-items-center rounded-full bg-slate-100 text-slate-900 transition hover:bg-slate-200" aria-label="More"><MoreHorizontal size={22} /></button>
-                <button type="button" className="grid h-11 w-11 place-items-center rounded-full bg-slate-100 text-slate-900 transition hover:bg-slate-200" aria-label="New chat"><Edit3 size={21} /></button>
+                <button type="button" className="grid h-11 w-11 place-items-center rounded-full bg-cyanSoft text-medical transition hover:bg-emerald-100" aria-label="More"><MoreHorizontal size={22} /></button>
+                <button type="button" className="grid h-11 w-11 place-items-center rounded-full bg-cyanSoft text-medical transition hover:bg-emerald-100" aria-label="New chat"><Edit3 size={21} /></button>
               </div>
             </div>
-            <label className="mt-5 flex h-12 items-center gap-3 rounded-full bg-slate-100 px-4 text-slate-500">
+            <label className="mt-5 flex h-12 items-center gap-3 rounded-full bg-[#f0f8f4] px-4 text-slate-500 ring-1 ring-emerald-100">
               <Search size={22} />
               <input className="min-w-0 flex-1 bg-transparent text-base font-semibold text-slate-900 outline-none placeholder:text-slate-500" placeholder="Search Messenger" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} />
             </label>
             <div className="mt-4 flex items-center gap-3 text-sm font-extrabold text-slate-900">
-              <button type="button" className={`rounded-full px-4 py-2 ${filter === "all" ? "bg-blue-50 text-[#0084ff]" : "hover:bg-slate-100"}`} onClick={() => setFilter("all")}>All</button>
-              <button type="button" className={`rounded-full px-4 py-2 ${filter === "unread" ? "bg-blue-50 text-[#0084ff]" : "hover:bg-slate-100"}`} onClick={() => setFilter("unread")}>Unread</button>
+              <button type="button" className={`rounded-full px-4 py-2 ${filter === "all" ? "bg-cyanSoft text-medical" : "hover:bg-emerald-50"}`} onClick={() => setFilter("all")}>All</button>
+              <button type="button" className={`rounded-full px-4 py-2 ${filter === "unread" ? "bg-cyanSoft text-medical" : "hover:bg-emerald-50"}`} onClick={() => setFilter("unread")}>Unread</button>
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-3 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin]">
@@ -273,8 +307,8 @@ export function ChatBox() {
               const title = user?.role === "DOCTOR" ? patientName : doctorName;
               const lastPreview = room.appointment?.type === "ONLINE" ? "Онлайн зөвлөгөө" : room.doctor.specialty;
               return (
-                <button key={room.id} type="button" className={`flex items-center gap-3 rounded-2xl p-3 text-left transition ${activeRoomId === room.id ? "bg-[#e7f3ff]" : "hover:bg-slate-100"}`} onClick={() => selectRoom(room.id)}>
-                  <div className="relative grid h-14 w-14 shrink-0 place-items-center rounded-full bg-gradient-to-br from-sky-200 to-cyan-100 text-lg font-black text-[#0084ff]">
+                <button key={room.id} type="button" className={`flex items-center gap-3 rounded-2xl p-3 text-left transition ${activeRoomId === room.id ? "bg-cyanSoft" : "hover:bg-emerald-50"}`} onClick={() => selectRoom(room.id)}>
+                  <div className="relative grid h-14 w-14 shrink-0 place-items-center rounded-full bg-gradient-to-br from-emerald-100 to-cyanSoft text-lg font-black text-medical">
                     {getInitials(title)}
                     <span className="absolute bottom-0 right-0 h-4 w-4 rounded-full border-2 border-white bg-emerald-500" />
                   </div>
@@ -282,18 +316,18 @@ export function ChatBox() {
                     <p className="truncate text-base font-extrabold text-slate-950">{title}</p>
                     <p className="mt-0.5 truncate text-sm font-semibold text-slate-500">{lastPreview}</p>
                   </div>
-                  {unreadRoomIds.has(room.id) && <span className="h-2.5 w-2.5 rounded-full bg-[#0084ff]" />}
+                  {unreadRoomIds.has(room.id) && <span className="h-2.5 w-2.5 rounded-full bg-medical" />}
                 </button>
               );
             })}
-            {visibleRooms.length === 0 && <p className="rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">Чат олдсонгүй.</p>}
+            {visibleRooms.length === 0 && <p className="rounded-xl bg-emerald-50 p-4 text-sm font-semibold text-slate-500">Чат олдсонгүй.</p>}
             </div>
           </div>
         </aside>
         <main className="flex min-h-0 flex-col bg-white">
-          <div className="flex h-20 items-center justify-between border-b border-slate-200 px-5 shadow-sm">
+          <div className="flex h-20 items-center justify-between border-b border-emerald-100 px-5 shadow-sm">
             <div className="flex items-center gap-3">
-              <div className="relative grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br from-sky-200 to-cyan-100 text-base font-black text-[#0084ff]">
+              <div className="relative grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br from-emerald-100 to-cyanSoft text-base font-black text-medical">
                 {activeInitials}
                 {activeRoom && <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500" />}
               </div>
@@ -306,9 +340,9 @@ export function ChatBox() {
               </div>
             </div>
             {activeRoom?.appointment && (
-              <div className="flex items-center gap-3 text-[#a100ff]">
+              <div className="flex items-center gap-3 text-medical">
                 {activeOnlineAppointment && (
-                  <button type="button" title="Видео дуудлага" aria-label="Видео дуудлага" className="grid h-10 w-10 place-items-center rounded-full transition hover:bg-purple-50" onClick={startVideoCall}>
+                  <button type="button" title="Видео дуудлага" aria-label="Видео дуудлага" className="grid h-10 w-10 place-items-center rounded-full transition hover:bg-cyanSoft" onClick={startVideoCall}>
                     <Video size={23} />
                   </button>
                 )}
@@ -316,24 +350,38 @@ export function ChatBox() {
             )}
           </div>
           {activeRoom?.appointment && (
-            <div className="border-b border-slate-100 px-5 py-2 text-xs font-bold text-slate-500">
-              <span className="rounded-full bg-blue-50 px-3 py-1 text-[#0084ff]">Онлайн зөвлөгөө</span>
+            <div className="border-b border-emerald-100 px-5 py-2 text-xs font-bold text-slate-500">
+              <span className="rounded-full bg-cyanSoft px-3 py-1 text-medical">Онлайн зөвлөгөө</span>
               <span className="ml-2">{formatDateTime(activeRoom.appointment.scheduledAt)}</span>
             </div>
           )}
-          <div ref={messagesRef} className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto scroll-smooth bg-white px-8 py-5 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin]">
+          <div ref={messagesRef} className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto scroll-smooth bg-white px-8 py-5 [scrollbar-color:#b7d8cd_transparent] [scrollbar-width:thin]">
             <div className="mt-auto" />
             {messages.map((message) => <MessageBubble key={message.id} mine={message.senderId === user?.id} text={message.content} status={message.status} />)}
             {activeRoom && messages.length === 0 && <p className="rounded-xl bg-cyanSoft p-4 text-sm font-semibold text-medical">Энэ чатад зурвас алга. Эхний зурвасаа илгээнэ үү.</p>}
+            <div ref={messagesEndRef} />
           </div>
-          <div className="flex items-center gap-2 border-t border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-2 border-t border-emerald-100 bg-white p-4">
             <input ref={fileInputRef} type="file" className="hidden" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={sendAttachment} />
-            <button type="button" className="grid h-10 w-10 place-items-center rounded-full text-[#0084ff] hover:bg-blue-50" aria-label="Файл хавсаргах" disabled={!activeRoomId || uploading} onClick={() => fileInputRef.current?.click()}><Paperclip size={20} /></button>
-            <div className="flex h-12 flex-1 items-center gap-2 rounded-full bg-[#f0f2f5] px-4">
-              <input className="min-w-0 flex-1 bg-transparent text-base font-medium text-slate-900 outline-none placeholder:text-slate-500" placeholder="Aa" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") sendMessage(); }} disabled={!activeRoomId} />
-              <Smile className="text-[#0084ff]" size={22} />
+            <button type="button" className="grid h-10 w-10 place-items-center rounded-full text-medical hover:bg-cyanSoft" aria-label="Файл хавсаргах" disabled={!activeRoomId || uploading} onClick={() => fileInputRef.current?.click()}><Paperclip size={20} /></button>
+            <div className="flex h-12 flex-1 items-center gap-2 rounded-full bg-[#f0f8f4] px-4 ring-1 ring-emerald-100">
+              <input ref={messageInputRef} className="min-w-0 flex-1 bg-transparent text-base font-medium text-slate-900 outline-none placeholder:text-slate-500" placeholder="Aa" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") sendMessage(); }} disabled={!activeRoomId} />
+              <div ref={emojiRef} className="relative">
+                <button type="button" className="grid h-9 w-9 place-items-center rounded-full text-medical transition hover:bg-emerald-50 disabled:opacity-40" aria-label="Emoji" disabled={!activeRoomId} onClick={() => setEmojiOpen((open) => !open)}>
+                  <Smile size={22} />
+                </button>
+                {emojiOpen && (
+                  <div className="absolute bottom-12 right-0 z-30 grid w-72 grid-cols-8 gap-1 rounded-3xl border border-emerald-100 bg-white p-3 shadow-[0_20px_60px_rgba(25,105,89,0.18)]">
+                    {emojiOptions.map((emoji) => (
+                      <button key={emoji} type="button" className="grid h-8 w-8 place-items-center rounded-xl text-xl transition hover:bg-cyanSoft" onClick={() => insertEmoji(emoji)}>
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-            <button type="button" className="grid h-10 w-10 place-items-center rounded-full bg-[#0084ff] text-white transition hover:bg-blue-600" aria-label="Илгээх" disabled={!activeRoomId || sending || uploading} onClick={sendMessage}><Send size={18} /></button>
+            <button type="button" className="grid h-10 w-10 place-items-center rounded-full bg-medical text-white transition hover:bg-[#1d6758]" aria-label="Илгээх" disabled={!activeRoomId || sending || uploading} onClick={sendMessage}><Send size={18} /></button>
           </div>
         </main>
     </div>

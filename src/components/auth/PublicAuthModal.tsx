@@ -31,8 +31,9 @@ export function PublicAuthModal({ mode, onClose, onModeChange }: { mode: Mode | 
   const setAuth = useAuthStore((state) => state.setAuth);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [regLetters, setRegLetters] = useState("АА");
-  const [regNumber, setRegNumber] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState<AlertState | null>(null);
@@ -66,13 +67,41 @@ export function PublicAuthModal({ mode, onClose, onModeChange }: { mode: Mode | 
     }
   }
 
-  function handleRegisterRequest(event: FormEvent<HTMLFormElement>) {
+  async function handleRegisterRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!regNumber.trim() || !phone.trim()) {
-      setAlert({ type: "error", text: "Регистр болон утасны дугаараа оруулна уу" });
+    setAlert(null);
+    if (!firstName.trim() || !email.trim() || !phone.trim() || !password.trim()) {
+      setAlert({ type: "error", text: "Нэр, и-мэйл, утас, нууц үгээ бүрэн оруулна уу" });
       return;
     }
-    setAlert({ type: "success", text: "Хүсэлт амжилттай илгээгдлээ" });
+    if (password !== confirmPassword) {
+      setAlert({ type: "error", text: "Нууц үг давтах хэсэг таарахгүй байна" });
+      return;
+    }
+    try {
+      setLoading(true);
+      const response = await authService.register({
+        firstName: firstName.trim(),
+        lastName: lastName.trim() || undefined,
+        email: email.trim(),
+        phone: phone.trim(),
+        password,
+        role: "PATIENT",
+      });
+      const { token, user } = getAuthPayload(response.data);
+      setAuth(token, user);
+      setAlert({ type: "success", text: "Бүртгэл амжилттай. Хувийн мэдээллээ гүйцээнэ үү." });
+      window.setTimeout(() => {
+        onClose();
+        router.replace("/dashboard/patient?section=profile");
+        router.refresh();
+      }, 450);
+    } catch (error) {
+      const status = (error as AxiosError).response?.status;
+      setAlert({ type: "error", text: status === 409 ? "И-мэйл эсвэл утас бүртгэлтэй байна" : "Бүртгүүлэхэд алдаа гарлаа" });
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -102,17 +131,15 @@ export function PublicAuthModal({ mode, onClose, onModeChange }: { mode: Mode | 
             <h2 className="text-2xl font-bold text-navy">Үйлчлүүлэгчээр бүртгүүлэх</h2>
             {alert && <AuthAlert {...alert} />}
             <form className="mt-6 grid gap-3" onSubmit={handleRegisterRequest}>
-              <div>
-                <p className="mb-2 text-sm font-semibold text-slate-600">Регистрийн дугаар</p>
-                <div className="grid grid-cols-[88px_1fr] gap-2">
-                  <select className="h-11 rounded-lg border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-medical focus:ring-4 focus:ring-sky-100" value={regLetters} onChange={(event) => setRegLetters(event.target.value)}>
-                    {["АА", "ББ", "ВВ", "ГГ", "ДД", "УБ"].map((item) => <option key={item}>{item}</option>)}
-                  </select>
-                  <Input inputMode="numeric" placeholder="Тоон хэсэг" value={regNumber} onChange={(event) => setRegNumber(event.target.value)} />
-                </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input placeholder="Овог" value={lastName} onChange={(event) => setLastName(event.target.value)} disabled={loading} />
+                <Input placeholder="Нэр" value={firstName} onChange={(event) => setFirstName(event.target.value)} disabled={loading} />
               </div>
-              <Input inputMode="tel" placeholder="Утасны дугаар" value={phone} onChange={(event) => setPhone(event.target.value)} />
-              <Button>Хүсэлт илгээх</Button>
+              <Input type="email" placeholder="И-мэйл хаяг" value={email} onChange={(event) => setEmail(event.target.value)} disabled={loading} />
+              <Input inputMode="tel" placeholder="Утасны дугаар" value={phone} onChange={(event) => setPhone(event.target.value)} disabled={loading} />
+              <Input type="password" placeholder="Нууц үг" value={password} onChange={(event) => setPassword(event.target.value)} disabled={loading} />
+              <Input type="password" placeholder="Нууц үг давтах" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} disabled={loading} />
+              <Button disabled={loading}>{loading ? "Бүртгэж байна..." : "Бүртгүүлэх"}</Button>
             </form>
             <div className="my-5 h-px bg-slate-100" />
             <p className="text-center text-sm text-slate-600">Өмнө нь бүртгүүлсэн бол?</p>
