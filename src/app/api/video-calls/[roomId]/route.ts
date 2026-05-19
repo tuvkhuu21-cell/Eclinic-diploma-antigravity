@@ -11,8 +11,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const user = getAuthUser(request);
     const { roomId } = await params;
+    if (!roomId) return fail("Video call roomId is required", 400);
     return ok(await videoService.getByRoom(user.userId, roomId));
   } catch (error) {
-    return fail(errorMessage(error), error instanceof ApiError ? error.statusCode : 500);
+    if (error instanceof ApiError) {
+      return fail(error.message, error.statusCode);
+    }
+    console.error("GET /api/video-calls/[roomId] failed", error);
+    return fail(errorMessage(error), 500);
   }
 }

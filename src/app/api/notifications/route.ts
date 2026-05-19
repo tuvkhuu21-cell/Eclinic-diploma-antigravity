@@ -13,10 +13,14 @@ export const OPTIONS = options;
 export async function GET(request: NextRequest) {
   try {
     const user = getAuthUser(request);
-    return ok(await notificationService.list(user.userId));
+    const notifications = await notificationService.list(user.userId);
+    return ok(Array.isArray(notifications) ? notifications : []);
   } catch (error) {
-    if (error instanceof ApiError && (error.statusCode === 401 || error.statusCode === 403 || error.statusCode === 404)) return ok([]);
-    return fail(errorMessage(error), error instanceof ApiError ? error.statusCode : 500);
+    if (error instanceof ApiError) {
+      return fail(error.message, error.statusCode);
+    }
+    console.error("GET /api/notifications failed", error);
+    return fail("Failed to load notifications", 500);
   }
 }
 
@@ -27,6 +31,10 @@ export async function POST(request: NextRequest) {
     const input = validateBody(createNotificationSchema, await request.json());
     return created(await notificationService.create(input));
   } catch (error) {
-    return fail(errorMessage(error), error instanceof ApiError ? error.statusCode : 500);
+    if (error instanceof ApiError) {
+      return fail(error.message, error.statusCode);
+    }
+    console.error("POST /api/notifications failed", error);
+    return fail(errorMessage(error), 500);
   }
 }
