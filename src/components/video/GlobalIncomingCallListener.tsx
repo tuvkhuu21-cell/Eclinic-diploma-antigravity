@@ -8,7 +8,7 @@ import { useAuthStore } from "@/store/auth.store";
 import { api } from "@/services/api";
 
 const RINGING_TIMEOUT_MS = 30_000;
-const POLLING_INTERVAL_MS = 5_000;
+const POLLING_INTERVAL_MS = 2_500;
 
 type IncomingVideoCall = {
   roomId: string;
@@ -60,7 +60,7 @@ export function GlobalIncomingCallListener() {
   }, [enabled, userId, isVideoPage]);
 
   useEffect(() => {
-    if (!enabled || !userId || isVideoPage || incoming || realtimeEnabled) return;
+    if (!enabled || !userId || isVideoPage || incoming) return;
     let cancelled = false;
 
     async function checkIncomingCall() {
@@ -82,7 +82,7 @@ export function GlobalIncomingCallListener() {
     }
 
     void checkIncomingCall();
-    const timer = window.setInterval(checkIncomingCall, POLLING_INTERVAL_MS);
+    const timer = window.setInterval(checkIncomingCall, realtimeEnabled ? POLLING_INTERVAL_MS : 1_500);
     return () => {
       cancelled = true;
       window.clearInterval(timer);

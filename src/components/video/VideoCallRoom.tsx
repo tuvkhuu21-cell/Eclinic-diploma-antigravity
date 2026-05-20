@@ -134,11 +134,10 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
   }, []);
 
   useEffect(() => {
-    if (realtimeEnabled) return;
     const timer = window.setInterval(() => {
       void loadSignals();
       if (startAfterAcceptRef.current && !startedRef.current) void checkAcceptedAndStart();
-    }, 5_000);
+    }, realtimeEnabled ? 2_000 : 1_500);
     return () => window.clearInterval(timer);
   }, [roomId, realtimeEnabled]);
 
@@ -240,10 +239,10 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
       if (message.createdAt && message.createdAt > latestVideoChatAtRef.current) latestVideoChatAtRef.current = message.createdAt;
       setMessages((current) => upsertMessages(current, message));
     });
-    const timer = realtimeEnabled ? null : window.setInterval(refreshMessages, 15_000);
+    const timer = window.setInterval(refreshMessages, realtimeEnabled ? 12_000 : 5_000);
     return () => {
       cancelled = true;
-      if (timer) window.clearInterval(timer);
+      window.clearInterval(timer);
       removeRealtimeChannel(channel);
     };
   }, [meta?.chatRoom?.id, realtimeEnabled]);
