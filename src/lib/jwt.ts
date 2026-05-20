@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 
-export type AuthRole = "PATIENT" | "DOCTOR" | "ADMIN";
+export type AuthRole = "PATIENT" | "DOCTOR" | "HOSPITAL" | "ADMIN";
 export type JwtPayload = { userId: string; role: AuthRole };
 
 const secret = process.env.JWT_SECRET || "dev-secret-change-me";

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { CalendarClock, HeartPulse, History, LayoutDashboard, LogOut, MessageCircle, Settings, UserRound } from "lucide-react";
+import { Building2, CalendarClock, HeartPulse, History, LayoutDashboard, LogOut, MessageCircle, Settings, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AuthRole, AuthUser, useAuthStore } from "@/store/auth.store";
 import { api } from "@/services/api";
@@ -11,6 +11,7 @@ import { api } from "@/services/api";
 const roleLabel: Record<AuthRole, string> = {
   PATIENT: "Үйлчлүүлэгчийн профайл",
   DOCTOR: "Эмчийн профайл",
+  HOSPITAL: "Байгууллагын профайл",
   ADMIN: "Админ профайл",
 };
 
@@ -31,6 +32,13 @@ const menuItemsByRole: Record<AuthRole, Array<{ label: string; href: string; ico
     { label: "Хянах самбар", href: "/dashboard/admin", icon: LayoutDashboard },
     { label: "Тохиргоо", href: "/dashboard/admin", icon: Settings },
   ],
+  HOSPITAL: [
+    { label: "Байгууллагын самбар", href: "/dashboard/hospital", icon: Building2 },
+    { label: "Эмч нар", href: "/dashboard/hospital?section=doctors", icon: UserRound },
+    { label: "Өвчтөн / захиалга", href: "/dashboard/hospital?section=patients", icon: CalendarClock },
+    { label: "Шинжилгээ", href: "/dashboard/hospital?section=labs", icon: HeartPulse },
+    { label: "Тохиргоо", href: "/dashboard/hospital?section=settings", icon: Settings },
+  ],
 };
 
 export function UserAvatarMenu({ user, role, buttonClassName }: { user?: AuthUser; role?: AuthRole; buttonClassName?: string }) {
@@ -39,7 +47,7 @@ export function UserAvatarMenu({ user, role, buttonClassName }: { user?: AuthUse
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const activeRole = user?.role || role || "PATIENT";
-  const profileHref = activeRole === "DOCTOR" ? "/dashboard/doctor?section=profile" : activeRole === "ADMIN" ? "/dashboard/admin" : "/dashboard/patient?section=profile";
+  const profileHref = activeRole === "DOCTOR" ? "/dashboard/doctor?section=profile" : activeRole === "ADMIN" ? "/dashboard/admin" : activeRole === "HOSPITAL" ? "/dashboard/hospital" : "/dashboard/patient?section=profile";
   const menuItems = menuItemsByRole[activeRole];
   const initials = `${user?.lastName?.[0] || ""}${user?.firstName?.[0] || "Х"}`;
   const fullName = `${user?.lastName || ""} ${user?.firstName || "Хэрэглэгч"}`.trim();

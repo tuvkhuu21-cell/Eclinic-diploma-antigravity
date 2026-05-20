@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type AuthRole = "PATIENT" | "DOCTOR" | "ADMIN";
+export type AuthRole = "PATIENT" | "DOCTOR" | "HOSPITAL" | "ADMIN";
 export type AuthUser = {
   id: string;
   email: string;

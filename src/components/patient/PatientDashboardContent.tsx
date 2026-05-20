@@ -28,6 +28,7 @@ export function PatientDashboardContent() {
       return;
     }
     if (activeRole === "DOCTOR") router.replace("/dashboard/doctor");
+    if (activeRole === "HOSPITAL") router.replace("/dashboard/hospital");
   }, [hasHydrated, role, router, token, user?.role]);
 
   useEffect(() => {
@@ -50,7 +51,7 @@ export function PatientDashboardContent() {
   }, []);
 
   if (!hasHydrated) return <section className="min-h-screen bg-slate-50" />;
-  if (user?.role === "DOCTOR" || role === "DOCTOR") return <section className="min-h-screen bg-slate-50" />;
+  if (user?.role === "DOCTOR" || role === "DOCTOR" || user?.role === "HOSPITAL" || role === "HOSPITAL") return <section className="min-h-screen bg-slate-50" />;
 
   return (
     <section className="bg-slate-50 px-4 py-8">

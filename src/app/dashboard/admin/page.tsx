@@ -21,7 +21,7 @@ type AdminData = {
     lastName?: string | null;
     email: string;
     phone?: string | null;
-    role: "PATIENT" | "DOCTOR" | "ADMIN";
+    role: "PATIENT" | "DOCTOR" | "HOSPITAL" | "ADMIN";
     isActive: boolean;
     createdAt: string;
   }>;

@@ -15,6 +15,7 @@ type AlertState = { type: "success" | "error"; text: string };
 const dashboardByRole: Record<AuthRole, string> = {
   PATIENT: "/dashboard/patient",
   DOCTOR: "/dashboard/doctor",
+  HOSPITAL: "/dashboard/hospital",
   ADMIN: "/dashboard/admin",
 };
 
@@ -33,6 +34,9 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<AuthRole>("PATIENT");
+  const [hospitalName, setHospitalName] = useState("");
+  const [hospitalAddress, setHospitalAddress] = useState("");
+  const [hospitalDistrict, setHospitalDistrict] = useState("");
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState<AlertState | null>(null);
 
@@ -40,7 +44,7 @@ export default function RegisterPage() {
     event.preventDefault();
     setAlert(null);
 
-    if (!firstName.trim() || !email.trim() || !password.trim()) {
+    if (!firstName.trim() || !email.trim() || !password.trim() || (role === "HOSPITAL" && !hospitalName.trim())) {
       setAlert({ type: "error", text: "Мэдээллээ бүрэн оруулна уу" });
       return;
     }
@@ -52,7 +56,16 @@ export default function RegisterPage() {
 
     try {
       setLoading(true);
-      const response = await authService.register({ firstName: firstName.trim(), lastName: lastName.trim() || undefined, email: email.trim(), password, role });
+      const response = await authService.register({
+        firstName: firstName.trim(),
+        lastName: lastName.trim() || undefined,
+        email: email.trim(),
+        password,
+        role,
+        hospitalName: hospitalName.trim() || undefined,
+        hospitalAddress: hospitalAddress.trim() || undefined,
+        hospitalDistrict: hospitalDistrict.trim() || undefined,
+      });
       const { token, user } = getAuthPayload(response.data);
       setAuth(token, user);
       setAlert({ type: "success", text: "Амжилттай бүртгүүллээ" });
@@ -82,7 +95,15 @@ export default function RegisterPage() {
           <select className="h-11 rounded-lg border border-slate-200 px-4 text-sm outline-none transition focus:border-medical focus:ring-4 focus:ring-sky-100 disabled:opacity-60" value={role} onChange={(event) => setRole(event.target.value as AuthRole)} disabled={loading}>
             <option value="PATIENT">PATIENT</option>
             <option value="DOCTOR">DOCTOR</option>
+            <option value="HOSPITAL">HOSPITAL</option>
           </select>
+          {role === "HOSPITAL" && (
+            <>
+              <Input className="md:col-span-2" placeholder="Байгууллага / эмнэлгийн нэр" value={hospitalName} onChange={(event) => setHospitalName(event.target.value)} disabled={loading} />
+              <Input placeholder="Дүүрэг" value={hospitalDistrict} onChange={(event) => setHospitalDistrict(event.target.value)} disabled={loading} />
+              <Input placeholder="Хаяг" value={hospitalAddress} onChange={(event) => setHospitalAddress(event.target.value)} disabled={loading} />
+            </>
+          )}
           <Button className="md:col-span-2" disabled={loading}>{loading ? "Бүртгэж байна..." : "Бүртгүүлэх"}</Button>
         </form>
         <p className="mt-4 text-sm text-slate-600">Бүртгэлтэй юу? <Link className="font-semibold text-medical" href="/auth/login">Нэвтрэх</Link></p>

@@ -9,7 +9,7 @@ import type { doctorProfileUpdateSchema, doctorRegisterSchema } from "./doctor.s
 type DoctorRegisterInput = z.infer<typeof doctorRegisterSchema>;
 type DoctorProfileUpdateInput = z.infer<typeof doctorProfileUpdateSchema>;
 
-function authPayload(user: { id: string; email: string; role: "PATIENT" | "DOCTOR" | "ADMIN"; firstName: string; lastName?: string | null }) {
+function authPayload(user: { id: string; email: string; role: "PATIENT" | "DOCTOR" | "HOSPITAL" | "ADMIN"; firstName: string; lastName?: string | null }) {
   const token = signJwt({ userId: user.id, role: user.role });
   return { token, user: { id: user.id, email: user.email, role: user.role, firstName: user.firstName, lastName: user.lastName || undefined } };
 }

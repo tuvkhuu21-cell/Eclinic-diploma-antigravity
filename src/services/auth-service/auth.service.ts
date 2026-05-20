@@ -5,10 +5,22 @@ import { comparePassword, hashPassword } from "@/lib/bcrypt";
 import type { z } from "zod";
 import type { loginSchema } from "./auth.schema";
 
-type RegisterInput = { email: string; password: string; firstName: string; lastName?: string; phone?: string; role?: "PATIENT" | "DOCTOR" | "ADMIN" };
+type AuthRole = "PATIENT" | "DOCTOR" | "HOSPITAL" | "ADMIN";
+type RegisterInput = {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName?: string;
+  phone?: string;
+  role?: AuthRole;
+  hospitalName?: string;
+  hospitalType?: string;
+  hospitalAddress?: string;
+  hospitalDistrict?: string;
+};
 type LoginInput = z.infer<typeof loginSchema>;
 
-function authPayload(user: { id: string; email: string; role: "PATIENT" | "DOCTOR" | "ADMIN"; firstName: string; lastName?: string | null }) {
+function authPayload(user: { id: string; email: string; role: AuthRole; firstName: string; lastName?: string | null }) {
   const token = signJwt({ userId: user.id, role: user.role });
   return { token, user: { id: user.id, email: user.email, role: user.role, firstName: user.firstName, lastName: user.lastName || undefined } };
 }
@@ -22,6 +34,7 @@ export const authService = {
       if (phoneExists) throw new ApiError(409, "Phone already registered");
     }
     const passwordHash = await hashPassword(input.password);
+    const role = input.role || "PATIENT";
     const user = await prisma.user.create({
       data: {
         email: input.email,
@@ -29,8 +42,20 @@ export const authService = {
         firstName: input.firstName,
         lastName: input.lastName,
         phone: input.phone,
-        role: input.role || "PATIENT",
-        patientProfile: !input.role || input.role === "PATIENT" ? { create: {} } : undefined,
+        role,
+        patientProfile: role === "PATIENT" ? { create: {} } : undefined,
+        hospitalAccount: role === "HOSPITAL" ? {
+          create: {
+            name: input.hospitalName || input.firstName,
+            type: input.hospitalType || "Эмнэлэг",
+            description: `${input.hospitalName || input.firstName} байгууллагын профайл.`,
+            phone: input.phone,
+            address: input.hospitalAddress || "Улаанбаатар хот",
+            district: input.hospitalDistrict || "Сүхбаатар",
+            latitude: 47.9186,
+            longitude: 106.9176,
+          },
+        } : undefined,
       },
     });
     return authPayload(user);

@@ -23,7 +23,7 @@ export function Navbar() {
   const activeRole = user?.role || role;
   const isLoggedIn = Boolean(token && activeRole);
   const isPatient = activeRole === "PATIENT";
-  const homeHref = activeRole === "DOCTOR" ? "/dashboard/doctor" : activeRole === "ADMIN" ? "/dashboard/admin" : "/";
+  const homeHref = activeRole === "DOCTOR" ? "/dashboard/doctor" : activeRole === "ADMIN" ? "/dashboard/admin" : activeRole === "HOSPITAL" ? "/dashboard/hospital" : "/";
   const shouldHideDoctorAuthHeader = pathname === "/doctor/login" || pathname === "/doctor/register";
 
   useEffect(() => {

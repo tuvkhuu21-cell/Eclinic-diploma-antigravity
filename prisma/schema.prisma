@@ -10,6 +10,7 @@ datasource db {
 enum Role {
   PATIENT
   DOCTOR
+  HOSPITAL
   ADMIN
 }
 
@@ -45,6 +46,7 @@ model User {
   updatedAt       DateTime         @updatedAt
   patientProfile  PatientProfile?
   doctorProfile   DoctorProfile?
+  hospitalAccount Hospital?
   sentMessages    Message[]        @relation("SentMessages")
   notifications   Notification[]
   aiConversation  AiConversation?
@@ -121,6 +123,7 @@ model DoctorProfile {
 
 model Hospital {
   id          String          @id @default(cuid())
+  ownerId     String?         @unique
   name        String
   type        String
   description String?
@@ -131,9 +134,13 @@ model Hospital {
   longitude   Float
   rating      Float           @default(0)
   createdAt   DateTime        @default(now())
+  owner       User?           @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   departments Department[]
   doctors     DoctorProfile[]
   appointments Appointment[]
+  labResults  LabResult[]
+
+  @@index([ownerId])
 }
 
 model Department {
@@ -193,14 +200,18 @@ model Consultation {
 model LabResult {
   id          String         @id @default(cuid())
   patientId   String
+  hospitalId  String?
   code        String         @unique
   title       String
   resultJson  Json
   summary     String?
   issuedAt    DateTime       @default(now())
   patient     PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  hospital    Hospital?      @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
 
   @@index([patientId])
+  @@index([hospitalId])
+  @@index([hospitalId, issuedAt])
 }
 
 model ChatRoom {

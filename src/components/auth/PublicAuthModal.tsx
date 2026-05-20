@@ -16,6 +16,7 @@ type AlertState = { type: "success" | "error"; text: string };
 const dashboardByRole: Record<AuthRole, string> = {
   PATIENT: "/dashboard/patient",
   DOCTOR: "/dashboard/doctor",
+  HOSPITAL: "/dashboard/hospital",
   ADMIN: "/dashboard/admin",
 };
 
