@@ -7,42 +7,7 @@ import { Button } from "@/components/ui/Button";
 import type { Doctor } from "@/components/doctors/DoctorCard";
 import { api } from "@/services/api";
 
-const visitTypes = [
-  "Дотор",
-  "Зүрх судас",
-  "Мэдрэл",
-  "Мэс засал",
-];
-
 const defaultPrice = 30000;
-const demoHospitalSpecialties = ["Дотор", "Зүрх судас", "Мэдрэл", "Мэс засал", "Уушги"];
-const demoDoctorNames: Record<string, Array<{ firstName: string; lastName: string; experience: number }>> = {
-  "Дотор": [
-    { lastName: "Бат", firstName: "Эрдэнэ", experience: 11 },
-    { lastName: "Сүх", firstName: "Номин", experience: 8 },
-    { lastName: "Очир", firstName: "Тэмүүлэн", experience: 6 },
-  ],
-  "Зүрх судас": [
-    { lastName: "Дорж", firstName: "Энхтуяа", experience: 12 },
-    { lastName: "Ган", firstName: "Билгүүн", experience: 9 },
-    { lastName: "Цогт", firstName: "Солонго", experience: 7 },
-  ],
-  "Мэдрэл": [
-    { lastName: "Ням", firstName: "Ананд", experience: 10 },
-    { lastName: "Лхагва", firstName: "Мөнхзул", experience: 8 },
-    { lastName: "Болд", firstName: "Идэр", experience: 5 },
-  ],
-  "Мэс засал": [
-    { lastName: "Жаргал", firstName: "Отгон", experience: 14 },
-    { lastName: "Баяр", firstName: "Энхжин", experience: 9 },
-    { lastName: "Даваа", firstName: "Төгөлдөр", experience: 6 },
-  ],
-  "Уушги": [
-    { lastName: "Пүрэв", firstName: "Ариун", experience: 13 },
-    { lastName: "Сайн", firstName: "Хулан", experience: 7 },
-    { lastName: "Мөнх", firstName: "Тэнүүн", experience: 5 },
-  ],
-};
 
 export function HospitalInPersonBookingPage() {
   const router = useRouter();
@@ -76,17 +41,15 @@ export function HospitalInPersonBookingPage() {
 
   const hospitalDoctors = useMemo(() => {
     const exact = doctors.filter((doctor) => (doctor.supportsInPerson ?? true) && (!hospitalId || doctor.hospital?.id === hospitalId || normalize(doctor.hospital?.name || "") === normalize(hospitalName)));
-    const base = exact.length > 0 ? exact : buildDemoDoctors(hospitalName);
-    if (!selectedVisitType) return base;
-    return base.filter((doctor) => specialtyMatches(doctor.specialty, selectedVisitType));
+    if (!selectedVisitType) return exact;
+    return exact.filter((doctor) => specialtyMatches(doctor.specialty, selectedVisitType));
   }, [doctors, hospitalId, hospitalName, selectedVisitType]);
 
   const slots = useMemo(() => generateSlots(selectedDate), [selectedDate]);
   const selectedDoctor = hospitalDoctors.find((doctor) => doctor.id === selectedDoctorId);
-  const registeredSpecialties = Array.from(new Set(hospitalDoctors.map((doctor) => doctor.specialty).filter(Boolean)));
-  const visibleVisitTypes = registeredSpecialties.length > 0
-    ? (selectedVisitType && !registeredSpecialties.some((item) => specialtyMatches(item, selectedVisitType)) ? [selectedVisitType, ...registeredSpecialties] : registeredSpecialties)
-    : (selectedVisitType && !visitTypes.includes(selectedVisitType) ? [selectedVisitType, ...visitTypes] : visitTypes);
+  const allHospitalDoctors = useMemo(() => doctors.filter((doctor) => (doctor.supportsInPerson ?? true) && (!hospitalId || doctor.hospital?.id === hospitalId || normalize(doctor.hospital?.name || "") === normalize(hospitalName))), [doctors, hospitalId, hospitalName]);
+  const registeredSpecialties = Array.from(new Set(allHospitalDoctors.map((doctor) => doctor.specialty).filter(Boolean)));
+  const visibleVisitTypes = registeredSpecialties;
 
   function continueToConfirmation() {
     if (!selectedVisitType) return setWarning("Үзлэгийн төрлөө сонгоно уу.");
@@ -155,7 +118,7 @@ export function HospitalInPersonBookingPage() {
                       </button>
                     );
                   })}
-                  {hospitalDoctors.length === 0 && <p className="rounded-2xl border border-dashed border-sky-100 bg-cyanSoft p-5 text-center font-bold text-navy md:col-span-2">Эмч олдсонгүй.</p>}
+                  {hospitalDoctors.length === 0 && <p className="rounded-2xl border border-dashed border-sky-100 bg-cyanSoft p-5 text-center font-bold text-navy md:col-span-2">{selectedVisitType ? "Энэ төрлөөр бүртгэлтэй эмч алга." : "Энэ эмнэлэгт бүртгэлтэй эмч одоогоор алга."}</p>}
                 </div>
               </section>
 
@@ -199,23 +162,6 @@ function generateSlots(_date: string) {
 function roomForDoctor(id: string) {
   const total = Array.from(id).reduce((sum, char) => sum + char.charCodeAt(0), 0);
   return `${Math.max(101, 100 + (total % 48))}`;
-}
-
-function buildDemoDoctors(hospitalName: string): Doctor[] {
-  return demoHospitalSpecialties.flatMap((specialty) => (demoDoctorNames[specialty] || []).map((doctor, index) => ({
-    id: `demo-hospital-doctor:${encodeURIComponent(hospitalName)}:${encodeURIComponent(specialty)}:${index + 1}`,
-    specialty,
-    experience: doctor.experience,
-    fee: defaultPrice,
-    rating: 4.8,
-    online: false,
-    supportsOnline: false,
-    supportsInPerson: true,
-    verified: true,
-    hospital: { name: hospitalName },
-    user: { firstName: doctor.firstName, lastName: doctor.lastName },
-    _count: { appointments: 0, consultations: 0 },
-  })));
 }
 
 function normalize(value: string) {

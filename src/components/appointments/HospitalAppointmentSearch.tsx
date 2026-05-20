@@ -7,7 +7,6 @@ import { Building2, CalendarDays, Check, ChevronDown, Clock, MapPin, Navigation,
 import { AppointmentFilterSidebar } from "./AppointmentFilterSidebar";
 import { DoctorProfileModal } from "@/components/doctors/DoctorProfileModal";
 import type { Doctor } from "@/components/doctors/DoctorCard";
-import { hospitals } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { api } from "@/services/api";
 
@@ -44,18 +43,6 @@ const schedule = [
   ["Ням", "Амрана"],
 ];
 
-const laboratoryRows: HospitalRow[] = [
-  { id: "lab-1", name: "MediLab Diagnostic Center", type: "Лаборатори", district: "Сүхбаатар", phone: "1800-3030", openNow: true, hours: "08:30 - 17:30" },
-  { id: "lab-2", name: "Нарны шинжилгээний төв", type: "Лаборатори", district: "Баянзүрх", phone: "7010-4040", openNow: true, hours: "08:00 - 18:00" },
-  { id: "lab-3", name: "City Lab Mongolia", type: "Лаборатори", district: "Хан-Уул", phone: "7711-5050", openNow: false, hours: "09:00 - 17:00" },
-];
-
-const packageRows: HospitalRow[] = [
-  { id: "package-1", name: "Ерөнхий эрүүл мэндийн багц", type: "Эрүүл мэндийн багц", district: "Сүхбаатар", phone: "1800-2026", openNow: true, hours: "08:30 - 17:30" },
-  { id: "package-2", name: "Зүрх судасны багц", type: "Эрүүл мэндийн багц", district: "Баянзүрх", phone: "1800-2026", openNow: true, hours: "08:30 - 17:30" },
-  { id: "package-3", name: "Дархлаа, витамин багц", type: "Эрүүл мэндийн багц", district: "Хан-Уул", phone: "1800-2026", openNow: false, hours: "09:00 - 16:00" },
-];
-
 export function HospitalAppointmentSearch({ mode = "hospital" }: { mode?: SearchMode }) {
   const [openNow, setOpenNow] = useState(false);
   const [location, setLocation] = useState("Бүгд");
@@ -65,12 +52,10 @@ export function HospitalAppointmentSearch({ mode = "hospital" }: { mode?: Search
   const [modalHospital, setModalHospital] = useState<HospitalRow | null>(null);
   const [dbHospitals, setDbHospitals] = useState<HospitalRow[]>([]);
   const rows = useMemo(() => {
-    const fallback = getRows(mode);
-    if (!dbHospitals.length) return fallback;
-    if (mode === "laboratory") return [...dbHospitals.filter((row) => normalize(`${row.type} ${row.name}`).includes(normalize("лаборатори"))), ...laboratoryRows];
-    if (mode === "package") return [...dbHospitals, ...packageRows];
-    if (mode === "state") return fallback;
-    return [...dbHospitals, ...fallback.filter((row) => !dbHospitals.some((db) => normalize(db.name) === normalize(row.name)))];
+    if (mode === "laboratory") return dbHospitals.filter((row) => normalize(`${row.type} ${row.name}`).includes(normalize("лаборатори")));
+    if (mode === "package") return dbHospitals.filter((row) => row.doctorCount || normalize(`${row.type} ${row.name}`).includes(normalize("лаборатори")));
+    if (mode === "state") return dbHospitals.filter((row) => normalize(row.type).includes(normalize("улсын")));
+    return dbHospitals.filter((row) => !normalize(row.type).includes(normalize("лаборатори")));
   }, [dbHospitals, mode]);
   const active = mode === "laboratory" ? "laboratory" : mode === "package" ? "package" : "hospital";
   const mapTitle = { hospital: "Хувийн эмнэлгийн байршил", state: "Улсын эмнэлгийн байршил", laboratory: "Лабораторийн байршил", package: "Эрүүл мэндийн багцын байршил" }[mode];
@@ -94,7 +79,7 @@ export function HospitalAppointmentSearch({ mode = "hospital" }: { mode?: Search
   }, [location, openNow, selectedDirections]);
 
   useEffect(() => {
-    api.get("/hospitals")
+    api.get("/hospitals", { params: { full: "1" } })
       .then((response) => {
         const hospitals = (response.data.data || []) as Array<{
           id: string;
@@ -210,7 +195,7 @@ function HospitalModal({ hospital, onClose }: { hospital: HospitalRow | null; on
   }, [hospital]);
 
   if (!hospital) return null;
-  const hospitalDoctors = doctors.filter((doctor) => !doctor.hospital?.id || doctor.hospital.id === hospital.id || normalize(doctor.hospital.name) === normalize(hospital.name));
+  const hospitalDoctors = doctors.filter((doctor) => doctor.hospital?.id === hospital.id || normalize(doctor.hospital?.name || "") === normalize(hospital.name));
   const specialties = hospitalDirections(hospital);
 
   return (
@@ -352,34 +337,6 @@ function useOutsideClose(ref: RefObject<HTMLDivElement | null>, onClose: () => v
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [onClose, ref]);
-}
-
-function getRows(mode: SearchMode): HospitalRow[] {
-  if (mode === "state") return [
-    { id: "state-1", name: "Улсын Нэгдүгээр Төв Эмнэлэг", type: "Улсын эмнэлэг", district: "Сүхбаатар", phone: "7711-1111", rating: 4.6, openNow: true, hours: "08:30 - 17:30" },
-    { id: "state-2", name: "Улсын Хоёрдугаар Төв Эмнэлэг", type: "Улсын эмнэлэг", district: "Баянзүрх", phone: "7015-0222", rating: 4.5, openNow: true, hours: "08:30 - 17:30" },
-    { id: "state-3", name: "Эх хүүхдийн эрүүл мэндийн үндэсний төв", type: "Улсын эмнэлэг", district: "Баянгол", phone: "362-205", rating: 4.7, openNow: false, hours: "09:00 - 16:00" },
-  ];
-  if (mode === "laboratory") return laboratoryRows;
-  if (mode === "package") return packageRows;
-  const extraNames = ["Энэрэл клиник", "Гранд Мед", "Интермед", "UB Songdo Hospital", "Эм Жэй эмнэлэг", "Ачтан клиник", "Гурван гал", "Тод Эйч", "Мөнгөн гүүр", "Бриллиант", "Скай Мед", "Итгэл эмнэлэг", "Оточ Манрамба", "Сонор Мед"];
-  const base = hospitals.map((hospital, index) => ({ ...hospital, type: "Хувийн эмнэлэг", phone: "1800-2026", openNow: index !== 2, hours: index === 2 ? "09:00 - 16:00" : "08:30 - 17:30" }));
-  const extras = extraNames.map((name, index) => {
-    const template = hospitals[index % hospitals.length];
-    return {
-      ...template,
-      id: `extra-${index + 1}`,
-      name,
-      type: "Хувийн эмнэлэг",
-      district: ubDistricts[index % ubDistricts.length],
-      phone: `75${String(index + 11).padStart(2, "0")}-2026`,
-      lat: (template.lat || 47.9) + index * 0.004,
-      lng: (template.lng || 106.9) + index * 0.004,
-      openNow: index % 4 !== 1,
-      hours: index % 4 === 1 ? "09:00 - 16:00" : "08:30 - 17:30",
-    };
-  });
-  return [...base, ...extras];
 }
 
 function inferLocation(hospital: HospitalRow) {
