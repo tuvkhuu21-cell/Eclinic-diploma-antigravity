@@ -15,7 +15,7 @@ function isPaid(paymentStatus?: string, status?: string) {
 export const adminService = {
   async stats() {
     const { start, end } = getTodayRange();
-    const [totalUsers, totalDoctors, totalPatients, users, doctors, todayAppointments] = await Promise.all([
+    const [totalUsers, totalDoctors, totalPatients, users, doctors, totalAppointmentCounts, todayAppointmentCounts, todayAppointments] = await Promise.all([
       prisma.user.count(),
       prisma.doctorProfile.count(),
       prisma.patientProfile.count(),
@@ -35,15 +35,17 @@ export const adminService = {
       }),
       prisma.doctorProfile.findMany({
         orderBy: { user: { createdAt: "desc" } },
-        include: {
+        select: {
+          id: true,
+          specialty: true,
+          gender: true,
+          online: true,
           user: { select: { firstName: true, lastName: true, email: true, phone: true } },
-          _count: { select: { appointments: true } },
-          appointments: {
-            where: { scheduledAt: { gte: start, lt: end } },
-            select: { id: true },
-          },
         },
+        take: 100,
       }),
+      prisma.appointment.groupBy({ by: ["doctorId"], _count: { _all: true } }),
+      prisma.appointment.groupBy({ by: ["doctorId"], where: { scheduledAt: { gte: start, lt: end } }, _count: { _all: true } }),
       prisma.appointment.findMany({
         where: { scheduledAt: { gte: start, lt: end } },
         orderBy: { scheduledAt: "asc" },
@@ -54,6 +56,8 @@ export const adminService = {
         },
       }),
     ]);
+    const totalCountByDoctor = new Map(totalAppointmentCounts.map((item) => [item.doctorId, item._count._all]));
+    const todayCountByDoctor = new Map(todayAppointmentCounts.map((item) => [item.doctorId, item._count._all]));
 
     const doctorAppointmentsToday = todayAppointments.filter((item) => item.type === "ONLINE").length;
     const hospitalAppointmentsToday = todayAppointments.filter((item) => item.type !== "ONLINE" || item.hospitalId).length;
@@ -80,8 +84,8 @@ export const adminService = {
         phone: doctor.user.phone,
         email: doctor.user.email,
         online: doctor.online,
-        totalAppointments: doctor._count.appointments,
-        todayAppointments: doctor.appointments.length,
+        totalAppointments: totalCountByDoctor.get(doctor.id) || 0,
+        todayAppointments: todayCountByDoctor.get(doctor.id) || 0,
       })),
       todayAppointments: todayAppointments.map((appointment) => ({
         id: appointment.id,

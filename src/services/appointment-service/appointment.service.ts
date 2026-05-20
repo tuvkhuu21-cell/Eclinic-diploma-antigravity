@@ -23,8 +23,10 @@ export const appointmentService = {
     take: 100,
   }),
   async my(userId: string) {
+    const patient = await prisma.patientProfile.findUnique({ where: { userId }, select: { id: true } });
+    if (!patient) return [];
     const appointments = await prisma.appointment.findMany({
-      where: { patient: { userId } },
+      where: { patientId: patient.id },
       select: {
         id: true,
         patientId: true,
@@ -45,7 +47,6 @@ export const appointmentService = {
             fee: true,
             hospital: { select: { id: true, name: true, address: true, phone: true } },
             user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
-            chatRooms: { where: { patient: { userId } }, select: { id: true }, take: 1 },
           },
         },
         hospital: { select: { id: true, name: true, address: true, phone: true } },
@@ -54,6 +55,14 @@ export const appointmentService = {
       orderBy: { scheduledAt: "asc" },
       take: 100,
     });
+    const chatRooms = await prisma.chatRoom.findMany({
+      where: {
+        patientId: patient.id,
+        doctorId: { in: Array.from(new Set(appointments.map((appointment) => appointment.doctorId))) },
+      },
+      select: { id: true, doctorId: true },
+    });
+    const chatRoomByDoctor = new Map(chatRooms.map((room) => [room.doctorId, { id: room.id }]));
     return appointments.map((appointment) => {
       const appointmentType = appointment.type || (appointment.reason?.includes("Багц шинжилгээ")
         ? "PACKAGE_ORDER"
@@ -71,63 +80,80 @@ export const appointmentService = {
         packageName: extractPackageName(appointment.reason),
         labName: extractPackageLabName(appointment.reason),
         hospital: appointment.hospital || appointment.doctor.hospital || null,
+        doctor: { ...appointment.doctor, chatRooms: chatRoomByDoctor.has(appointment.doctorId) ? [chatRoomByDoctor.get(appointment.doctorId)] : [] },
       };
     });
   },
-  doctor: (userId: string) => prisma.appointment.findMany({
-    where: { doctor: { userId } },
-    select: {
-      id: true,
-      doctorId: true,
-      scheduledAt: true,
-      durationMinutes: true,
-      type: true,
-      price: true,
-      paymentStatus: true,
-      reason: true,
-      status: true,
-      patient: {
-        select: {
-          id: true,
-          dateOfBirth: true,
-          gender: true,
-          registerNo: true,
-          bloodType: true,
-          maritalStatus: true,
-          heightCm: true,
-          weightKg: true,
-          bmi: true,
-          city: true,
-          district: true,
-          khoroo: true,
-          addressDetail: true,
-          emergencyRelation: true,
-          emergencyName: true,
-          emergencyPhone: true,
-          hasAllergy: true,
-          allergyNote: true,
-          hasChronicDisease: true,
-          chronicDiseaseNote: true,
-          hasRegularMedicine: true,
-          regularMedicineNote: true,
-          hasInjury: true,
-          injuryNote: true,
-          hasSurgery: true,
-          surgeryNote: true,
-          smoking: true,
-          alcohol: true,
-          movement: true,
-          food: true,
-          user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
-          chatRooms: { where: { doctor: { userId } }, select: { id: true }, take: 1 },
+  async doctor(userId: string) {
+    const doctor = await prisma.doctorProfile.findUnique({ where: { userId }, select: { id: true } });
+    if (!doctor) return [];
+    const appointments = await prisma.appointment.findMany({
+      where: { doctorId: doctor.id },
+      select: {
+        id: true,
+        doctorId: true,
+        scheduledAt: true,
+        durationMinutes: true,
+        type: true,
+        price: true,
+        paymentStatus: true,
+        reason: true,
+        status: true,
+        patientId: true,
+        patient: {
+          select: {
+            id: true,
+            dateOfBirth: true,
+            gender: true,
+            registerNo: true,
+            bloodType: true,
+            maritalStatus: true,
+            heightCm: true,
+            weightKg: true,
+            bmi: true,
+            city: true,
+            district: true,
+            khoroo: true,
+            addressDetail: true,
+            emergencyRelation: true,
+            emergencyName: true,
+            emergencyPhone: true,
+            hasAllergy: true,
+            allergyNote: true,
+            hasChronicDisease: true,
+            chronicDiseaseNote: true,
+            hasRegularMedicine: true,
+            regularMedicineNote: true,
+            hasInjury: true,
+            injuryNote: true,
+            hasSurgery: true,
+            surgeryNote: true,
+            smoking: true,
+            alcohol: true,
+            movement: true,
+            food: true,
+            user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
+          },
         },
+        hospital: { select: { id: true, name: true, address: true, phone: true } },
+        videoCall: { select: { roomId: true, status: true } },
       },
-      hospital: { select: { id: true, name: true, address: true, phone: true } },
-      videoCall: { select: { roomId: true, status: true } },
-    },
-    orderBy: { scheduledAt: "asc" },
-    take: 100,
-  }),
+      orderBy: { scheduledAt: "asc" },
+      take: 100,
+    });
+    const chatRooms = await prisma.chatRoom.findMany({
+      where: {
+        doctorId: doctor.id,
+        patientId: { in: Array.from(new Set(appointments.map((appointment) => appointment.patientId))) },
+      },
+      select: { id: true, patientId: true },
+    });
+    const chatRoomByPatient = new Map(chatRooms.map((room) => [room.patientId, { id: room.id }]));
+    return appointments.map((appointment) => ({
+      ...appointment,
+      patient: { ...appointment.patient, chatRooms: chatRoomByPatient.has(appointment.patientId) ? [chatRoomByPatient.get(appointment.patientId)] : [] },
+    }));
+  },
   async create(userId: string, data: { doctorId: string; hospitalId?: string; scheduledAt: string; reason: string; durationMinutes?: number; type?: string; price?: number; paymentStatus?: string }) {
     const patient = await prisma.patientProfile.findUnique({ where: { userId } });
     if (!patient) throw new ApiError(403, "Patient profile required");

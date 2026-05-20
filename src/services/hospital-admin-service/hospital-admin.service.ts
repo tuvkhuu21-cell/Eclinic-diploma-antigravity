@@ -22,7 +22,6 @@ export const hospitalAdminService = {
             verified: true,
             fee: true,
             user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
-            _count: { select: { appointments: true } },
           },
           take: 80,
         },
@@ -57,6 +56,12 @@ export const hospitalAdminService = {
       },
     });
     if (!hospital) throw new ApiError(404, "Hospital account not found");
+    const appointmentCounts = await prisma.appointment.groupBy({
+      by: ["doctorId"],
+      where: { doctorId: { in: hospital.doctors.map((doctor) => doctor.id) } },
+      _count: { _all: true },
+    });
+    const appointmentCountByDoctor = new Map(appointmentCounts.map((item) => [item.doctorId, item._count._all]));
 
     const patientMap = new Map<string, {
       id: string;
@@ -101,7 +106,7 @@ export const hospitalAdminService = {
         online: doctor.online,
         verified: doctor.verified,
         fee: doctor.fee,
-        appointments: doctor._count.appointments,
+        appointments: appointmentCountByDoctor.get(doctor.id) || 0,
       })),
       patients: Array.from(patientMap.values()),
       appointments: hospital.appointments.map((appointment) => ({
