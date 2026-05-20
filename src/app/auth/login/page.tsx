@@ -34,9 +34,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState<AlertState | null>(null);
+  const [preferredRole, setPreferredRole] = useState<AuthRole | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const role = params.get("role");
+    if (role === "HOSPITAL" || role === "DOCTOR" || role === "PATIENT") setPreferredRole(role);
     if (params.get("registered") === "1") {
       setAlert({ type: "success", text: "Амжилттай бүртгүүллээ. Имэйл, нууц үгээрээ нэвтэрнэ үү." });
     }
@@ -57,6 +60,10 @@ export default function LoginPage() {
       const { token, user } = getAuthPayload(response.data);
       setAuth(token, user);
       if (user.role === "DOCTOR") await api.patch("/doctors/me", { online: true }).catch(() => null);
+      if (preferredRole && user.role !== preferredRole) {
+        setAlert({ type: "error", text: preferredRole === "HOSPITAL" ? "Энэ бүртгэл байгууллагын эрх биш байна." : "Энэ бүртгэл сонгосон эрхтэй таарахгүй байна." });
+        return;
+      }
       setAlert({ type: "success", text: "Амжилттай нэвтэрлээ" });
       window.setTimeout(() => {
         router.replace(dashboardByRole[user.role]);
@@ -73,15 +80,17 @@ export default function LoginPage() {
   return (
     <section className="mx-auto max-w-md px-4 py-12">
       <Card className="p-6">
-        <h1 className="text-3xl font-bold text-navy">Нэвтрэх</h1>
-        <p className="mt-2 text-slate-600">Өөрийн эрхээр платформд нэвтэрнэ.</p>
+        <h1 className="text-3xl font-bold text-navy">{preferredRole === "HOSPITAL" ? "Байгууллагаар нэвтрэх" : "Нэвтрэх"}</h1>
+        <p className="mt-2 text-slate-600">{preferredRole === "HOSPITAL" ? "Эмнэлэг, лаборатори байгууллагын эрхээр нэвтэрнэ." : "Өөрийн эрхээр платформд нэвтэрнэ."}</p>
         {alert && <AuthAlert type={alert.type} text={alert.text} />}
         <form className="mt-6 grid gap-4" onSubmit={handleSubmit}>
           <Input type="email" placeholder="Имэйл" value={email} onChange={(event) => setEmail(event.target.value)} disabled={loading} />
           <Input type="password" placeholder="Нууц үг" value={password} onChange={(event) => setPassword(event.target.value)} disabled={loading} />
           <Button disabled={loading}>{loading ? "Нэвтэрч байна..." : "Нэвтрэх"}</Button>
         </form>
-        <p className="mt-4 text-sm text-slate-600">Шинэ хэрэглэгч үү? <Link className="font-semibold text-medical" href="/auth/register">Бүртгүүлэх</Link></p>
+        <p className="mt-4 text-sm text-slate-600">
+          Шинэ хэрэглэгч үү? <Link className="font-semibold text-medical" href={preferredRole === "HOSPITAL" ? "/auth/register?role=HOSPITAL" : "/auth/register"}>Бүртгүүлэх</Link>
+        </p>
       </Card>
     </section>
   );

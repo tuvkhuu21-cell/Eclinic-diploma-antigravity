@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { AxiosError } from "axios";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -39,6 +39,12 @@ export default function RegisterPage() {
   const [hospitalDistrict, setHospitalDistrict] = useState("");
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState<AlertState | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requestedRole = params.get("role");
+    if (requestedRole === "HOSPITAL" || requestedRole === "DOCTOR" || requestedRole === "PATIENT") setRole(requestedRole);
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -84,8 +90,8 @@ export default function RegisterPage() {
   return (
     <section className="mx-auto max-w-xl px-4 py-12">
       <Card className="p-6">
-        <h1 className="text-3xl font-bold text-navy">Бүртгүүлэх</h1>
-        <p className="mt-2 text-slate-600">Өвчтөн, эмч эсвэл байгууллагын админ эрхээр бүртгэл үүсгэнэ.</p>
+        <h1 className="text-3xl font-bold text-navy">{role === "HOSPITAL" ? "Байгууллага бүртгүүлэх" : "Бүртгүүлэх"}</h1>
+        <p className="mt-2 text-slate-600">{role === "HOSPITAL" ? "Эмнэлэг, лаборатори байгууллагын dashboard эрх үүсгэнэ." : "Өвчтөн, эмч эсвэл байгууллагын админ эрхээр бүртгэл үүсгэнэ."}</p>
         {alert && <AuthAlert type={alert.type} text={alert.text} />}
         <form className="mt-6 grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
           <Input placeholder="Нэр" value={firstName} onChange={(event) => setFirstName(event.target.value)} disabled={loading} />
@@ -106,7 +112,9 @@ export default function RegisterPage() {
           )}
           <Button className="md:col-span-2" disabled={loading}>{loading ? "Бүртгэж байна..." : "Бүртгүүлэх"}</Button>
         </form>
-        <p className="mt-4 text-sm text-slate-600">Бүртгэлтэй юу? <Link className="font-semibold text-medical" href="/auth/login">Нэвтрэх</Link></p>
+        <p className="mt-4 text-sm text-slate-600">
+          Бүртгэлтэй юу? <Link className="font-semibold text-medical" href={role === "HOSPITAL" ? "/auth/login?role=HOSPITAL" : "/auth/login"}>Нэвтрэх</Link>
+        </p>
       </Card>
     </section>
   );

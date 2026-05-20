@@ -101,13 +101,8 @@ export function Navbar() {
             <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-2">
               <div className="flex items-center gap-5">
                 <Link href="/doctor/login" prefetch={false} className="hover:text-white">Эмч</Link>
-                <Link href="/hospitals" prefetch={false} className="hover:text-white">Байгууллага</Link>
+                <Link href="/auth/login?role=HOSPITAL" prefetch={false} className="hover:text-white">Байгууллага</Link>
                 <Link href="/dashboard/patient?section=labs" prefetch={false} className="hover:text-white">Шинжилгээний хариу</Link>
-              </div>
-              <div className="hidden items-center gap-5 md:flex">
-                <button type="button" className="hover:text-white">Хэл сонгох</button>
-                <Link href="/settings" prefetch={false} className="hover:text-white">Бидний тухай</Link>
-                <Link href="/settings" prefetch={false} className="hover:text-white">Нууцлалын бодлого</Link>
               </div>
             </div>
           </div>
