@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { AxiosError } from "axios";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -12,6 +12,7 @@ import { api } from "@/services/api";
 import { AuthUser, useAuthStore } from "@/store/auth.store";
 
 type AlertState = { type: "success" | "error"; text: string };
+type HospitalOption = { id: string; name: string; type: string; district: string };
 
 function getAuthPayload(responseData: unknown): { token: string; user: AuthUser } {
   const data = responseData as { data?: { token?: string; user?: AuthUser }; token?: string; user?: AuthUser };
@@ -34,6 +35,7 @@ export default function DoctorRegisterPage() {
     gender: "Эмэгтэй",
     experience: "",
     fee: "",
+    hospitalId: "",
     hospital: "",
     bio: "",
     supportsOnline: "true",
@@ -41,6 +43,13 @@ export default function DoctorRegisterPage() {
   });
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState<AlertState | null>(null);
+  const [hospitals, setHospitals] = useState<HospitalOption[]>([]);
+
+  useEffect(() => {
+    api.get("/hospitals")
+      .then((response) => setHospitals((response.data.data || []) as HospitalOption[]))
+      .catch(() => setHospitals([]));
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -103,7 +112,14 @@ export default function DoctorRegisterPage() {
           </select>
           <Input inputMode="numeric" placeholder="Туршлага / жил" value={form.experience} onChange={(event) => patch("experience", event.target.value)} disabled={loading} />
           <Input inputMode="numeric" placeholder="Үзлэгийн төлбөр" value={form.fee} onChange={(event) => patch("fee", event.target.value)} disabled={loading} />
-          <Input placeholder="Эмнэлэг" value={form.hospital} onChange={(event) => patch("hospital", event.target.value)} disabled={loading} />
+          <select className="h-11 rounded-lg border border-slate-200 px-4 text-sm outline-none transition focus:border-medical focus:ring-4 focus:ring-sky-100" value={form.hospitalId} onChange={(event) => {
+            const hospital = hospitals.find((item) => item.id === event.target.value);
+            patch("hospitalId", event.target.value);
+            patch("hospital", hospital?.name || "");
+          }} disabled={loading}>
+            <option value="">Эмнэлэг сонгох</option>
+            {hospitals.map((hospital) => <option key={hospital.id} value={hospital.id}>{hospital.name} · {hospital.district}</option>)}
+          </select>
           <label className="flex h-11 items-center gap-3 rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-700">
             <input type="checkbox" className="h-4 w-4 accent-medical" checked={form.supportsOnline === "true"} onChange={(event) => patch("supportsOnline", event.target.checked ? "true" : "false")} disabled={loading} />
             Онлайн үзлэг авна

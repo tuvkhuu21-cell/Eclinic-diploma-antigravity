@@ -14,7 +14,11 @@ function authPayload(user: { id: string; email: string; role: "PATIENT" | "DOCTO
   return { token, user: { id: user.id, email: user.email, role: user.role, firstName: user.firstName, lastName: user.lastName || undefined } };
 }
 
-async function findHospitalId(name?: string) {
+async function findHospitalId(name?: string, id?: string) {
+  if (id) {
+    const hospital = await prisma.hospital.findUnique({ where: { id }, select: { id: true } });
+    if (hospital) return hospital.id;
+  }
   const value = name?.trim();
   if (!value) return undefined;
   const hospital = await prisma.hospital.findFirst({ where: { name: { equals: value, mode: "insensitive" } }, select: { id: true } });
@@ -22,10 +26,13 @@ async function findHospitalId(name?: string) {
 }
 
 export const doctorService = {
-  list: (query: { q?: string | null; specialty?: string | null; limit?: string | null }) =>
+  list: (query: { q?: string | null; specialty?: string | null; hospitalId?: string | null; visit?: string | null; limit?: string | null }) =>
     prisma.doctorProfile.findMany({
       where: {
+        hospitalId: query.hospitalId || undefined,
         specialty: query.specialty ? { contains: query.specialty, mode: "insensitive" } : undefined,
+        supportsInPerson: query.visit === "inPerson" ? true : undefined,
+        supportsOnline: query.visit === "online" ? true : undefined,
         user: query.q ? { OR: [{ firstName: { contains: query.q, mode: "insensitive" } }, { lastName: { contains: query.q, mode: "insensitive" } }] } : undefined,
       },
       select: {
@@ -71,7 +78,7 @@ export const doctorService = {
     const exists = await prisma.user.findUnique({ where: { email: input.email } });
     if (exists) throw new ApiError(409, "Email already registered");
     const passwordHash = await hashPassword(input.password);
-    const hospitalId = await findHospitalId(input.hospital);
+    const hospitalId = await findHospitalId(input.hospital, input.hospitalId);
     const user = await prisma.user.create({
       data: {
         email: input.email,
@@ -119,7 +126,7 @@ export const doctorService = {
   async updateMe(userId: string, input: DoctorProfileUpdateInput) {
     const doctor = await prisma.doctorProfile.findUnique({ where: { userId } });
     if (!doctor) throw new ApiError(404, "Doctor profile not found");
-    const hospitalId = await findHospitalId(input.hospital);
+    const hospitalId = await findHospitalId(input.hospital, input.hospitalId);
     return prisma.$transaction(async (tx) => {
       if (input.firstName !== undefined || input.lastName !== undefined || input.phone !== undefined) {
         await tx.user.update({
@@ -142,7 +149,7 @@ export const doctorService = {
           online: input.online,
           supportsOnline: input.supportsOnline ?? input.online ?? undefined,
           supportsInPerson: input.supportsInPerson,
-          hospitalId: input.hospital !== undefined ? hospitalId : undefined,
+          hospitalId: input.hospitalId !== undefined || input.hospital !== undefined ? hospitalId : undefined,
         },
         include: { user: true, hospital: true },
       });

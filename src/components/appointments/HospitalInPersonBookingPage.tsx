@@ -68,19 +68,25 @@ export function HospitalInPersonBookingPage() {
   }, []);
 
   useEffect(() => {
-    api.get("/doctors").then((response) => setDoctors(response.data.data as Doctor[])).catch(() => setDoctors([]));
-  }, []);
+    if (!hospitalId) return;
+    api.get("/doctors", { params: { hospitalId, visit: "inPerson", limit: 80 } })
+      .then((response) => setDoctors(response.data.data as Doctor[]))
+      .catch(() => setDoctors([]));
+  }, [hospitalId]);
 
   const hospitalDoctors = useMemo(() => {
-    const exact = doctors.filter((doctor) => doctor.hospital?.name && normalize(doctor.hospital.name) === normalize(hospitalName) && (doctor.supportsInPerson ?? true));
+    const exact = doctors.filter((doctor) => (doctor.supportsInPerson ?? true) && (!hospitalId || doctor.hospital?.id === hospitalId || normalize(doctor.hospital?.name || "") === normalize(hospitalName)));
     const base = exact.length > 0 ? exact : buildDemoDoctors(hospitalName);
-    if (!selectedVisitType) return base.filter((doctor) => demoHospitalSpecialties.some((specialty) => specialtyMatches(doctor.specialty, specialty)));
+    if (!selectedVisitType) return base;
     return base.filter((doctor) => specialtyMatches(doctor.specialty, selectedVisitType));
-  }, [doctors, hospitalName, selectedVisitType]);
+  }, [doctors, hospitalId, hospitalName, selectedVisitType]);
 
   const slots = useMemo(() => generateSlots(selectedDate), [selectedDate]);
   const selectedDoctor = hospitalDoctors.find((doctor) => doctor.id === selectedDoctorId);
-  const visibleVisitTypes = selectedVisitType && !visitTypes.includes(selectedVisitType) ? [selectedVisitType, ...visitTypes] : visitTypes;
+  const registeredSpecialties = Array.from(new Set(hospitalDoctors.map((doctor) => doctor.specialty).filter(Boolean)));
+  const visibleVisitTypes = registeredSpecialties.length > 0
+    ? (selectedVisitType && !registeredSpecialties.some((item) => specialtyMatches(item, selectedVisitType)) ? [selectedVisitType, ...registeredSpecialties] : registeredSpecialties)
+    : (selectedVisitType && !visitTypes.includes(selectedVisitType) ? [selectedVisitType, ...visitTypes] : visitTypes);
 
   function continueToConfirmation() {
     if (!selectedVisitType) return setWarning("Үзлэгийн төрлөө сонгоно уу.");

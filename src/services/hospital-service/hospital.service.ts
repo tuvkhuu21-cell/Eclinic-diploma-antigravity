@@ -19,8 +19,20 @@ export const hospitalService = {
         longitude: true,
         rating: true,
         createdAt: true,
+        _count: { select: { departments: true, doctors: true, appointments: true } },
         departments: { select: { id: true, name: true, description: true } },
+        doctors: {
+          select: {
+            id: true,
+            specialty: true,
+            supportsInPerson: true,
+            supportsOnline: true,
+            user: { select: { firstName: true, lastName: true } },
+          },
+          take: 12,
+        },
       },
+      orderBy: { createdAt: "desc" },
       take: 100,
     }),
   detail: (id: string) => prisma.hospital.findUnique({

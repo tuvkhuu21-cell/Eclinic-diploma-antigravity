@@ -74,30 +74,22 @@ export async function POST(request: NextRequest) {
     const result = await prisma.$transaction(async (tx) => {
       const appointmentId = randomUUID();
       const status = paymentStatus === "PAID" ? "CONFIRMED" : "PENDING";
-
-      // The current local DB may not have newer appointment metadata columns yet.
-      // Insert only the stable base columns, then return metadata in the API payload.
-      await tx.$executeRaw`
-        INSERT INTO "Appointment" ("id", "patientId", "doctorId", "hospitalId", "scheduledAt", "reason", "status")
-        VALUES (${appointmentId}, ${patient.id}, ${doctor.id}, ${doctor.hospitalId || (hospitalId.startsWith("seed-") ? hospitalId : null)}, ${scheduledDate}, ${reason}, ${status}::"AppointmentStatus")
-      `;
-
-      const appointment = {
-        id: appointmentId,
-        patientId: patient.id,
-        doctorId: doctor.id,
-        hospitalId: doctor.hospitalId || hospitalId || null,
-        scheduledAt: scheduledDate,
-        durationMinutes: 30,
-        type,
-        price,
-        paymentStatus,
-        reason,
-        status,
-        patient: { ...patient, user: { id: user.userId } },
-        doctor: { ...doctor },
-        hospital: null,
-      };
+      const appointment = await tx.appointment.create({
+        data: {
+          id: appointmentId,
+          patientId: patient.id,
+          doctorId: doctor.id,
+          hospitalId: doctor.hospitalId || (hospitalId.startsWith("seed-") ? hospitalId : undefined),
+          scheduledAt: scheduledDate,
+          durationMinutes: 30,
+          type,
+          price,
+          paymentStatus,
+          reason,
+          status,
+        },
+        include: { patient: { include: { user: true } }, doctor: { include: { user: true, hospital: true } }, hospital: true },
+      });
 
       const patientNotification = await tx.notification.create({
         data: {

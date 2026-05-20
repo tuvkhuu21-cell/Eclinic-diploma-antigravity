@@ -18,8 +18,12 @@ type HospitalRow = {
   type: string;
   district: string;
   phone: string;
+  address?: string;
   rating?: number;
   departments?: number;
+  doctorCount?: number;
+  appointmentCount?: number;
+  doctors?: Array<{ id: string; specialty: string; supportsInPerson?: boolean; user: { firstName: string; lastName?: string } }>;
   lat?: number;
   lng?: number;
   openNow?: boolean;
@@ -59,7 +63,15 @@ export function HospitalAppointmentSearch({ mode = "hospital" }: { mode?: Search
   const [page, setPage] = useState(1);
   const [selectedHospital, setSelectedHospital] = useState<HospitalRow | null>(null);
   const [modalHospital, setModalHospital] = useState<HospitalRow | null>(null);
-  const rows = useMemo(() => getRows(mode), [mode]);
+  const [dbHospitals, setDbHospitals] = useState<HospitalRow[]>([]);
+  const rows = useMemo(() => {
+    const fallback = getRows(mode);
+    if (!dbHospitals.length) return fallback;
+    if (mode === "laboratory") return [...dbHospitals.filter((row) => normalize(`${row.type} ${row.name}`).includes(normalize("лаборатори"))), ...laboratoryRows];
+    if (mode === "package") return [...dbHospitals, ...packageRows];
+    if (mode === "state") return fallback;
+    return [...dbHospitals, ...fallback.filter((row) => !dbHospitals.some((db) => normalize(db.name) === normalize(row.name)))];
+  }, [dbHospitals, mode]);
   const active = mode === "laboratory" ? "laboratory" : mode === "package" ? "package" : "hospital";
   const mapTitle = { hospital: "Хувийн эмнэлгийн байршил", state: "Улсын эмнэлгийн байршил", laboratory: "Лабораторийн байршил", package: "Эрүүл мэндийн багцын байршил" }[mode];
 
@@ -81,6 +93,44 @@ export function HospitalAppointmentSearch({ mode = "hospital" }: { mode?: Search
     setSelectedHospital(null);
   }, [location, openNow, selectedDirections]);
 
+  useEffect(() => {
+    api.get("/hospitals")
+      .then((response) => {
+        const hospitals = (response.data.data || []) as Array<{
+          id: string;
+          name: string;
+          type: string;
+          district: string;
+          phone?: string | null;
+          address?: string;
+          latitude: number;
+          longitude: number;
+          rating: number;
+          departments?: unknown[];
+          doctors?: HospitalRow["doctors"];
+          _count?: { departments?: number; doctors?: number; appointments?: number };
+        }>;
+        setDbHospitals(hospitals.map((hospital) => ({
+          id: hospital.id,
+          name: hospital.name,
+          type: hospital.type,
+          district: hospital.district,
+          phone: hospital.phone || "Утас бүртгээгүй",
+          address: hospital.address,
+          rating: hospital.rating,
+          departments: hospital._count?.departments || hospital.departments?.length || 0,
+          doctorCount: hospital._count?.doctors || hospital.doctors?.length || 0,
+          appointmentCount: hospital._count?.appointments || 0,
+          doctors: hospital.doctors || [],
+          lat: hospital.latitude,
+          lng: hospital.longitude,
+          openNow: true,
+          hours: "08:30 - 17:30",
+        })));
+      })
+      .catch(() => setDbHospitals([]));
+  }, []);
+
   return (
     <section className="bg-slate-50 px-4 py-8">
       <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[280px_1fr]">
@@ -99,6 +149,7 @@ export function HospitalAppointmentSearch({ mode = "hospital" }: { mode?: Search
                     <p className="mt-2 flex items-center gap-2 text-sm text-slate-600"><MapPin size={15} />{hospital.district} дүүрэг</p>
                     <p className="mt-1 flex items-center gap-2 text-sm text-slate-600"><Phone size={15} />{hospital.phone}</p>
                     {(mode === "hospital" || mode === "state") && <p className="mt-2 text-xs font-semibold text-slate-500">{hospitalDirections(hospital).slice(0, 3).join(" · ")}</p>}
+                    {hospital.doctorCount !== undefined && <p className="mt-2 text-xs font-bold text-medical">{hospital.doctorCount} эмч бүртгэлтэй · {hospital.appointmentCount || 0} захиалга</p>}
                   </div>
                 </button>
               ))}
@@ -146,7 +197,7 @@ function HospitalModal({ hospital, onClose }: { hospital: HospitalRow | null; on
   useEffect(() => {
     if (!hospital) return;
     setTab("about");
-    api.get("/doctors").then((response) => setDoctors(response.data.data as Doctor[])).catch(() => setDoctors([]));
+    api.get("/doctors", { params: { hospitalId: hospital.id, visit: "inPerson", limit: 80 } }).then((response) => setDoctors(response.data.data as Doctor[])).catch(() => setDoctors([]));
   }, [hospital]);
 
   useEffect(() => {
@@ -159,7 +210,7 @@ function HospitalModal({ hospital, onClose }: { hospital: HospitalRow | null; on
   }, [hospital]);
 
   if (!hospital) return null;
-  const hospitalDoctors = doctors.filter((doctor) => doctor.hospital?.name && normalize(doctor.hospital.name) === normalize(hospital.name));
+  const hospitalDoctors = doctors.filter((doctor) => !doctor.hospital?.id || doctor.hospital.id === hospital.id || normalize(doctor.hospital.name) === normalize(hospital.name));
   const specialties = hospitalDirections(hospital);
 
   return (
@@ -338,6 +389,8 @@ function inferLocation(hospital: HospitalRow) {
 }
 
 function hospitalDirections(hospital: HospitalRow) {
+  const registered = hospital.doctors?.map((doctor) => doctor.specialty).filter(Boolean) || [];
+  if (registered.length) return Array.from(new Set(registered));
   const text = normalize(`${hospital.name} ${hospital.type} ${hospital.district}`);
   const inferred = new Set<string>();
   if (text.includes(normalize("Хүүхэд")) || text.includes(normalize("эх барих")) || text.includes("narny")) ["Хүүхэд", "Эх барих, эмэгтэйчүүд", "Нярай"].forEach((item) => inferred.add(item));

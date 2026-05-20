@@ -13,6 +13,8 @@ export async function GET(request: NextRequest) {
     const rows = await doctorService.list({
       q: request.nextUrl.searchParams.get("q"),
       specialty: request.nextUrl.searchParams.get("specialty"),
+      hospitalId: request.nextUrl.searchParams.get("hospitalId"),
+      visit: request.nextUrl.searchParams.get("visit"),
       limit: request.nextUrl.searchParams.get("limit"),
     });
     if (Date.now() - startedAt > 600) console.info("GET /api/doctors slow", { ms: Date.now() - startedAt, count: rows.length });

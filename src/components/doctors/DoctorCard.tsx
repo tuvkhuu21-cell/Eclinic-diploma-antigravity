@@ -18,7 +18,7 @@ export type Doctor = {
   supportsOnline?: boolean;
   supportsInPerson?: boolean;
   verified: boolean;
-  hospital?: { name: string } | null;
+  hospital?: { id?: string; name: string; address?: string; phone?: string } | null;
   user: {
     firstName: string;
     lastName?: string;
