@@ -43,8 +43,12 @@ export default function RegisterPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const requestedRole = params.get("role");
-    if (requestedRole === "HOSPITAL" || requestedRole === "DOCTOR" || requestedRole === "PATIENT") setRole(requestedRole);
-  }, []);
+    if (requestedRole === "DOCTOR") {
+      router.replace("/doctor/register");
+      return;
+    }
+    if (requestedRole === "HOSPITAL" || requestedRole === "PATIENT") setRole(requestedRole);
+  }, [router]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -90,19 +94,14 @@ export default function RegisterPage() {
   return (
     <section className="mx-auto max-w-xl px-4 py-12">
       <Card className="p-6">
-        <h1 className="text-3xl font-bold text-navy">{role === "HOSPITAL" ? "Байгууллага бүртгүүлэх" : "Бүртгүүлэх"}</h1>
-        <p className="mt-2 text-slate-600">{role === "HOSPITAL" ? "Эмнэлэг, лаборатори байгууллагын dashboard эрх үүсгэнэ." : "Өвчтөн, эмч эсвэл байгууллагын админ эрхээр бүртгэл үүсгэнэ."}</p>
+        <h1 className="text-3xl font-bold text-navy">{role === "HOSPITAL" ? "Байгууллага бүртгүүлэх" : "Үйлчлүүлэгчээр бүртгүүлэх"}</h1>
+        <p className="mt-2 text-slate-600">{role === "HOSPITAL" ? "Эмнэлэг, лаборатори байгууллагын dashboard эрх үүсгэнэ." : "Өвчтөний эрхээр бүртгэл үүсгэнэ."}</p>
         {alert && <AuthAlert type={alert.type} text={alert.text} />}
         <form className="mt-6 grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
           <Input placeholder="Нэр" value={firstName} onChange={(event) => setFirstName(event.target.value)} disabled={loading} />
           <Input placeholder="Овог" value={lastName} onChange={(event) => setLastName(event.target.value)} disabled={loading} />
           <Input className="md:col-span-2" type="email" placeholder="Имэйл" value={email} onChange={(event) => setEmail(event.target.value)} disabled={loading} />
-          <Input type="password" placeholder="Нууц үг" value={password} onChange={(event) => setPassword(event.target.value)} disabled={loading} />
-          <select className="h-11 rounded-lg border border-slate-200 px-4 text-sm outline-none transition focus:border-medical focus:ring-4 focus:ring-sky-100 disabled:opacity-60" value={role} onChange={(event) => setRole(event.target.value as AuthRole)} disabled={loading}>
-            <option value="PATIENT">PATIENT</option>
-            <option value="DOCTOR">DOCTOR</option>
-            <option value="HOSPITAL">HOSPITAL</option>
-          </select>
+          <Input className="md:col-span-2" type="password" placeholder="Нууц үг" value={password} onChange={(event) => setPassword(event.target.value)} disabled={loading} />
           {role === "HOSPITAL" && (
             <>
               <Input className="md:col-span-2" placeholder="Байгууллага / эмнэлгийн нэр" value={hospitalName} onChange={(event) => setHospitalName(event.target.value)} disabled={loading} />

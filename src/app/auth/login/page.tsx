@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { authService } from "@/services/auth.service";
-import { api } from "@/services/api";
 import { AuthRole, AuthUser, useAuthStore } from "@/store/auth.store";
 
 type AlertState = { type: "success" | "error"; text: string };
@@ -34,12 +33,16 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState<AlertState | null>(null);
-  const [preferredRole, setPreferredRole] = useState<AuthRole | null>(null);
+  const [preferredRole, setPreferredRole] = useState<AuthRole>("PATIENT");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const role = params.get("role");
-    if (role === "HOSPITAL" || role === "DOCTOR" || role === "PATIENT") setPreferredRole(role);
+    if (role === "DOCTOR") {
+      router.replace("/doctor/login");
+      return;
+    }
+    if (role === "HOSPITAL" || role === "PATIENT") setPreferredRole(role);
     if (params.get("registered") === "1") {
       setAlert({ type: "success", text: "Амжилттай бүртгүүллээ. Имэйл, нууц үгээрээ нэвтэрнэ үү." });
     }
@@ -56,14 +59,9 @@ export default function LoginPage() {
 
     try {
       setLoading(true);
-      const response = await authService.login({ email: email.trim(), password });
+      const response = await authService.login({ email: email.trim(), password, expectedRole: preferredRole });
       const { token, user } = getAuthPayload(response.data);
       setAuth(token, user);
-      if (user.role === "DOCTOR") await api.patch("/doctors/me", { online: true }).catch(() => null);
-      if (preferredRole && user.role !== preferredRole) {
-        setAlert({ type: "error", text: preferredRole === "HOSPITAL" ? "Энэ бүртгэл байгууллагын эрх биш байна." : "Энэ бүртгэл сонгосон эрхтэй таарахгүй байна." });
-        return;
-      }
       setAlert({ type: "success", text: "Амжилттай нэвтэрлээ" });
       window.setTimeout(() => {
         router.replace(dashboardByRole[user.role]);
@@ -71,7 +69,7 @@ export default function LoginPage() {
       }, 500);
     } catch (error) {
       const status = (error as AxiosError).response?.status;
-      setAlert({ type: "error", text: status === 401 ? "Имэйл эсвэл нууц үг буруу байна" : "Имэйл эсвэл нууц үг буруу байна" });
+      setAlert({ type: "error", text: status === 401 ? "Имэйл эсвэл нууц үг буруу байна" : status === 403 ? (preferredRole === "HOSPITAL" ? "Энэ хэсэгт зөвхөн байгууллага нэвтэрнэ." : "Энэ хэсэгт зөвхөн үйлчлүүлэгч нэвтэрнэ.") : "Имэйл эсвэл нууц үг буруу байна" });
     } finally {
       setLoading(false);
     }
@@ -80,8 +78,8 @@ export default function LoginPage() {
   return (
     <section className="mx-auto max-w-md px-4 py-12">
       <Card className="p-6">
-        <h1 className="text-3xl font-bold text-navy">{preferredRole === "HOSPITAL" ? "Байгууллагаар нэвтрэх" : "Нэвтрэх"}</h1>
-        <p className="mt-2 text-slate-600">{preferredRole === "HOSPITAL" ? "Эмнэлэг, лаборатори байгууллагын эрхээр нэвтэрнэ." : "Өөрийн эрхээр платформд нэвтэрнэ."}</p>
+        <h1 className="text-3xl font-bold text-navy">{preferredRole === "HOSPITAL" ? "Байгууллагаар нэвтрэх" : "Үйлчлүүлэгчээр нэвтрэх"}</h1>
+        <p className="mt-2 text-slate-600">{preferredRole === "HOSPITAL" ? "Эмнэлэг, лаборатори байгууллагын эрхээр нэвтэрнэ." : "Өвчтөний эрхээр платформд нэвтэрнэ."}</p>
         {alert && <AuthAlert type={alert.type} text={alert.text} />}
         <form className="mt-6 grid gap-4" onSubmit={handleSubmit}>
           <Input type="email" placeholder="Имэйл" value={email} onChange={(event) => setEmail(event.target.value)} disabled={loading} />

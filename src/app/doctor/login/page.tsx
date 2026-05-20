@@ -39,13 +39,8 @@ export default function DoctorLoginPage() {
 
     try {
       setLoading(true);
-      const response = await authService.login({ email: email.trim(), password });
+      const response = await authService.login({ email: email.trim(), password, expectedRole: "DOCTOR" });
       const { token, user } = getAuthPayload(response.data);
-      if (user.role !== "DOCTOR") {
-        logout();
-        setAlert({ type: "error", text: "Эмчийн эрхтэй хэрэглэгчээр нэвтэрнэ үү" });
-        return;
-      }
       setAuth(token, user);
       await api.patch("/doctors/me", { online: true }).catch(() => null);
       setAlert({ type: "success", text: "Амжилттай нэвтэрлээ" });
@@ -55,7 +50,8 @@ export default function DoctorLoginPage() {
       }, 400);
     } catch (error) {
       const status = (error as AxiosError).response?.status;
-      setAlert({ type: "error", text: status === 401 ? "И-мэйл эсвэл нууц үг буруу байна" : "Нэвтрэхэд алдаа гарлаа" });
+      if (status === 403) logout();
+      setAlert({ type: "error", text: status === 401 ? "И-мэйл эсвэл нууц үг буруу байна" : status === 403 ? "Энэ хэсэгт зөвхөн эмч нэвтэрнэ." : "Нэвтрэхэд алдаа гарлаа" });
     } finally {
       setLoading(false);
     }

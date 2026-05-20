@@ -7,7 +7,6 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { authService } from "@/services/auth.service";
-import { api } from "@/services/api";
 import { AuthRole, AuthUser, useAuthStore } from "@/store/auth.store";
 
 type Mode = "login" | "register";
@@ -50,10 +49,9 @@ export function PublicAuthModal({ mode, onClose, onModeChange }: { mode: Mode | 
     }
     try {
       setLoading(true);
-      const response = await authService.login({ email: email.trim(), password });
+      const response = await authService.login({ email: email.trim(), password, expectedRole: "PATIENT" });
       const { token, user } = getAuthPayload(response.data);
       setAuth(token, user);
-      if (user.role === "DOCTOR") await api.patch("/doctors/me", { online: true }).catch(() => null);
       setAlert({ type: "success", text: "Амжилттай нэвтэрлээ" });
       window.setTimeout(() => {
         onClose();
@@ -62,7 +60,7 @@ export function PublicAuthModal({ mode, onClose, onModeChange }: { mode: Mode | 
       }, 400);
     } catch (error) {
       const status = (error as AxiosError).response?.status;
-      setAlert({ type: "error", text: status === 401 ? "И-мэйл эсвэл нууц үг буруу байна" : "Нэвтрэхэд алдаа гарлаа" });
+      setAlert({ type: "error", text: status === 401 ? "И-мэйл эсвэл нууц үг буруу байна" : status === 403 ? "Энэ хэсэгт зөвхөн үйлчлүүлэгч нэвтэрнэ." : "Нэвтрэхэд алдаа гарлаа" });
     } finally {
       setLoading(false);
     }

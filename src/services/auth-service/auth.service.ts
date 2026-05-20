@@ -35,6 +35,9 @@ export const authService = {
     }
     const passwordHash = await hashPassword(input.password);
     const role = input.role || "PATIENT";
+    if (role !== "PATIENT" && role !== "HOSPITAL") {
+      throw new ApiError(400, "Use the correct registration page for this role");
+    }
     const user = await prisma.user.create({
       data: {
         email: input.email,
@@ -71,6 +74,7 @@ export const authService = {
       },
     });
     if (!user || !(await comparePassword(input.password, user.passwordHash))) throw new ApiError(401, "Invalid credentials");
+    if (input.expectedRole && user.role !== input.expectedRole) throw new ApiError(403, "Wrong login role");
     return authPayload(user);
   },
 };
