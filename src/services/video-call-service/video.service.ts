@@ -87,12 +87,11 @@ export const videoService = {
       return existing;
     }
     if (existing) {
-      const roomId = createRoomId(data.appointmentId, patientId, doctorId);
       const reopened = await prisma.videoCall.update({
         where: { id: existing.id },
-        data: { roomId, status: "waiting", startedAt: null, endedAt: null },
+        data: { status: "waiting", startedAt: null, endedAt: null },
       });
-      console.log("video-call: reopened closed room with new roomId", { roomId, oldRoomId: existing.roomId, appointmentId: reopened.appointmentId, doctorId: reopened.doctorId, patientId: reopened.patientId });
+      console.log("video-call: reopened closed room", { roomId: reopened.roomId, appointmentId: reopened.appointmentId, doctorId: reopened.doctorId, patientId: reopened.patientId });
       return reopened;
     }
 

@@ -87,7 +87,6 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
   const [micOn, setMicOn] = useState(true);
   const [cameraOn, setCameraOn] = useState(true);
   const [chatOpen, setChatOpen] = useState(true);
-  const [sending, setSending] = useState(false);
   const [status, setStatus] = useState<"idle" | "waiting" | "ringing" | "active" | "declined" | "ended">("idle");
   const [notice, setNotice] = useState("Камер, микрофоноо зөвшөөрөөд дуудлага эхлүүлнэ үү.");
   const [permissionError, setPermissionError] = useState("");
@@ -97,17 +96,21 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
     let cancelled = false;
     async function loadMeta() {
       try {
+        const autoStart = new URLSearchParams(window.location.search).get("start") === "1";
         const response = await api.get(`/video-calls/${roomId}`);
         if (cancelled) return;
         const next = response.data.data as VideoMeta;
         setMeta(next);
         console.log("video-call: current status", { roomId: next.roomId, status: next.status, appointmentId: next.appointmentId, doctorId: next.doctorId, patientId: next.patientId });
         setStatus(next.status || "waiting");
-        if (next.status === "declined" || next.status === "ended") {
+        if ((next.status === "declined" || next.status === "ended") && !autoStart) {
           setNotice(next.status === "declined" ? "Дуудлагаас татгалзсан байна." : "Дуудлага дууссан байна.");
           cleanup(next.status === "ended");
           if (next.status === "declined") setStatus("declined");
           window.setTimeout(() => router.replace("/chat"), 700);
+        } else if ((next.status === "declined" || next.status === "ended") && autoStart) {
+          setStatus("waiting");
+          setNotice("Дуудлагын өрөөг нээж байна...");
         }
       } catch {
         if (!cancelled) setNotice("Видео өрөөний мэдээлэл олдсонгүй.");
@@ -629,10 +632,9 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
 
   async function sendMessage() {
     const content = draft.trim();
-    if (!content || !meta?.chatRoom?.id || sending) return;
-    setSending(true);
+    if (!content || !meta?.chatRoom?.id) return;
     const tempId = `temp-${crypto.randomUUID()}`;
-    const optimistic: VideoChatMessage = { id: tempId, content, senderId: user?.id || "me", createdAt: new Date().toISOString(), status: "sending" };
+    const optimistic: VideoChatMessage = { id: tempId, content, senderId: user?.id || "me", createdAt: new Date().toISOString() };
     setDraft("");
     shouldStickToBottomRef.current = true;
     setMessages((current) => upsertMessages(current, optimistic));
@@ -644,8 +646,6 @@ export function VideoCallRoom({ roomId }: { roomId: string }) {
       void broadcastRealtime(`chat-room-${meta.chatRoom.id}`, "new-message", saved);
     } catch {
       setMessages((current) => current.map((item) => item.id === tempId ? { ...item, status: "failed" } : item));
-    } finally {
-      setSending(false);
     }
   }
 

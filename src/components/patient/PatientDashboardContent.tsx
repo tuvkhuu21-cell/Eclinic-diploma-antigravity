@@ -406,6 +406,19 @@ function formatDoctorName(appointment: PatientAppointment) {
 }
 
 async function startPatientVideoCall(appointment: PatientAppointment, user?: { id: string; firstName: string; lastName?: string }) {
+  const existingRoomId = appointment.videoCall?.roomId;
+  if (existingRoomId) {
+    void startPatientVideoCallInBackground({
+      roomId: existingRoomId,
+      doctorId: appointment.doctor.id,
+      appointmentId: appointment.id,
+      recipientUserId: appointment.doctor.user.id,
+      callerId: user?.id,
+      callerName: `${user?.lastName || ""} ${user?.firstName || "Үйлчлүүлэгч"}`.trim(),
+    });
+    window.location.href = `/video-call/${existingRoomId}?start=1`;
+    return;
+  }
   const response = await api.post("/video-calls", {
     doctorId: appointment.doctor.id,
     appointmentId: appointment.id,
@@ -430,6 +443,29 @@ async function startPatientVideoCall(appointment: PatientAppointment, user?: { i
     });
   }
   window.location.href = `/video-call/${roomId}${call.status === "active" ? "?accept=1" : "?start=1"}`;
+}
+
+async function startPatientVideoCallInBackground(data: { roomId: string; doctorId: string; appointmentId: string; recipientUserId?: string; callerId?: string; callerName: string }) {
+  try {
+    const response = await api.post("/video-calls", { doctorId: data.doctorId, appointmentId: data.appointmentId });
+    const call = response.data.data as { roomId: string; status?: string };
+    if (call.status !== "active") await api.patch("/video-calls", { roomId: call.roomId || data.roomId, status: "ringing" }).catch(() => null);
+  } catch {
+    await api.patch("/video-calls", { roomId: data.roomId, status: "ringing" }).catch(() => null);
+  }
+  if (data.recipientUserId) {
+    void broadcastRealtime(`user-notifications-${data.recipientUserId}`, "incoming-video-call", {
+      roomId: data.roomId,
+      appointmentId: data.appointmentId,
+      callerId: data.callerId,
+      callerName: data.callerName,
+    });
+  }
+  void broadcastRealtime(`video-call-${data.roomId}`, "call-ringing", {
+    roomId: data.roomId,
+    appointmentId: data.appointmentId,
+    callerId: data.callerId,
+  });
 }
 
 function formatDateTime(value: string) {

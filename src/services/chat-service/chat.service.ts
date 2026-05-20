@@ -4,8 +4,15 @@ import { broadcastRealtimeServer } from "@/lib/supabase-realtime-server";
 
 export const chatService = {
   async rooms(userId: string) {
+    const { patientId, doctorId } = await getParticipantProfileIds(userId);
+    if (!patientId && !doctorId) return [];
     const rooms = await prisma.chatRoom.findMany({
-      where: { OR: [{ patient: { userId } }, { doctor: { userId } }] },
+      where: {
+        OR: [
+          ...(patientId ? [{ patientId }] : []),
+          ...(doctorId ? [{ doctorId }] : []),
+        ],
+      },
       select: {
         id: true,
         patientId: true,
@@ -66,11 +73,12 @@ export const chatService = {
     });
   },
   async messages(userId: string, roomId: string, options?: { limit?: number; since?: string }) {
-    const room = await prisma.chatRoom.findFirst({
-      where: { id: roomId, OR: [{ patient: { userId } }, { doctor: { userId } }] },
-      select: { id: true },
+    const { patientId, doctorId } = await getParticipantProfileIds(userId);
+    const room = await prisma.chatRoom.findUnique({
+      where: { id: roomId },
+      select: { id: true, patientId: true, doctorId: true },
     });
-    if (!room) throw new ApiError(404, "Chat room not found");
+    if (!room || (room.patientId !== patientId && room.doctorId !== doctorId)) throw new ApiError(404, "Chat room not found");
     const limit = Math.min(Math.max(options?.limit || 50, 1), 100);
     const sinceDate = options?.since ? new Date(options.since) : null;
     const rows = await prisma.message.findMany({
@@ -85,12 +93,19 @@ export const chatService = {
     return rows.reverse();
   },
   async send(userId: string, data: { roomId: string; content: string }) {
+    const { patientId, doctorId } = await getParticipantProfileIds(userId);
     const room = await prisma.chatRoom.findUnique({
       where: { id: data.roomId },
-      select: { id: true, patient: { select: { userId: true } }, doctor: { select: { userId: true } } },
+      select: {
+        id: true,
+        patientId: true,
+        doctorId: true,
+        patient: { select: { userId: true } },
+        doctor: { select: { userId: true } },
+      },
     });
     if (!room) throw new ApiError(404, "Chat room not found");
-    if (room.patient.userId !== userId && room.doctor.userId !== userId) throw new ApiError(403, "Chat room access denied");
+    if (room.patientId !== patientId && room.doctorId !== doctorId) throw new ApiError(403, "Chat room access denied");
     const message = await prisma.message.create({
       data: { roomId: data.roomId, senderId: userId, content: data.content },
       select: { id: true, roomId: true, senderId: true, content: true, createdAt: true },
@@ -106,6 +121,14 @@ export const chatService = {
     return message;
   },
 };
+
+async function getParticipantProfileIds(userId: string) {
+  const [patient, doctor] = await Promise.all([
+    prisma.patientProfile.findUnique({ where: { userId }, select: { id: true } }),
+    prisma.doctorProfile.findUnique({ where: { userId }, select: { id: true } }),
+  ]);
+  return { patientId: patient?.id, doctorId: doctor?.id };
+}
 
 async function createChatNotification(recipientUserId: string) {
   try {

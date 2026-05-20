@@ -43,7 +43,6 @@ export function ChatBox() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [unreadRoomIds, setUnreadRoomIds] = useState<Set<string>>(new Set());
-  const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -196,18 +195,16 @@ export function ChatBox() {
 
   async function sendMessage() {
     const content = draft.trim();
-    if (!activeRoomId || !content || sending) return;
+    if (!activeRoomId || !content) return;
     const tempId = `temp-${Date.now()}`;
     const optimisticMessage: ChatMessage = {
       id: tempId,
       content,
       senderId: user?.id || "me",
       createdAt: new Date().toISOString(),
-      status: "sending",
     };
     setMessages((current) => mergeMessages(current, [optimisticMessage]));
     setDraft("");
-    setSending(true);
     try {
       const response = await api.post("/chat/messages", { roomId: activeRoomId, content });
       const saved = response.data.data as ChatMessage;
@@ -216,15 +213,13 @@ export function ChatBox() {
       void broadcastRealtime(`chat-room-${activeRoomId}`, "new-message", saved);
     } catch {
       setMessages((current) => current.map((message) => message.id === tempId ? { ...message, status: "failed" } : message));
-    } finally {
-      setSending(false);
     }
   }
 
   async function sendAttachment(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!activeRoomId || !file || sending || uploading) return;
+    if (!activeRoomId || !file || uploading) return;
     setUploading(true);
     try {
       const data = new FormData();
@@ -272,6 +267,21 @@ export function ChatBox() {
 
   async function startVideoCall() {
     if (!activeRoom?.appointment) return;
+    const existingRoomId = activeRoom.appointment.videoCall?.roomId;
+    if (existingRoomId) {
+      void startVideoCallInBackground({
+        roomId: existingRoomId,
+        doctorId: activeRoom.doctor.id,
+        appointmentId: activeRoom.appointment.id,
+        recipientUserId: user?.role === "DOCTOR" ? activeRoom.patient.user.id : activeRoom.doctor.user.id,
+        callerName: user?.role === "DOCTOR"
+          ? `${activeRoom.doctor.user.lastName || ""} ${activeRoom.doctor.user.firstName}`.trim()
+          : `${activeRoom.patient.user.lastName || ""} ${activeRoom.patient.user.firstName}`.trim(),
+        callerId: user?.id,
+      });
+      window.location.href = `/video-call/${existingRoomId}?start=1`;
+      return;
+    }
     const response = await api.post("/video-calls", {
       doctorId: activeRoom.doctor.id,
       appointmentId: activeRoom.appointment.id,
@@ -402,11 +412,34 @@ export function ChatBox() {
                 )}
               </div>
             </div>
-            <button type="button" className="grid h-10 w-10 place-items-center rounded-full bg-medical text-white transition hover:bg-[#1d6758]" aria-label="Илгээх" disabled={!activeRoomId || sending || uploading} onClick={sendMessage}><Send size={18} /></button>
+            <button type="button" className="grid h-10 w-10 place-items-center rounded-full bg-medical text-white transition hover:bg-[#1d6758]" aria-label="Илгээх" disabled={!activeRoomId || uploading} onClick={sendMessage}><Send size={18} /></button>
           </div>
         </main>
     </div>
   );
+}
+
+async function startVideoCallInBackground(data: { roomId: string; doctorId: string; appointmentId: string; recipientUserId?: string; callerId?: string; callerName: string }) {
+  try {
+    const response = await api.post("/video-calls", { doctorId: data.doctorId, appointmentId: data.appointmentId });
+    const call = response.data.data as { roomId: string; status?: string };
+    if (call.status !== "active") await api.patch("/video-calls", { roomId: call.roomId || data.roomId, status: "ringing" }).catch(() => null);
+  } catch {
+    await api.patch("/video-calls", { roomId: data.roomId, status: "ringing" }).catch(() => null);
+  }
+  if (data.recipientUserId) {
+    void broadcastRealtime(`user-notifications-${data.recipientUserId}`, "incoming-video-call", {
+      roomId: data.roomId,
+      appointmentId: data.appointmentId,
+      callerId: data.callerId,
+      callerName: data.callerName,
+    });
+  }
+  void broadcastRealtime(`video-call-${data.roomId}`, "call-ringing", {
+    roomId: data.roomId,
+    appointmentId: data.appointmentId,
+    callerId: data.callerId,
+  });
 }
 
 function formatDateTime(value: string) {
