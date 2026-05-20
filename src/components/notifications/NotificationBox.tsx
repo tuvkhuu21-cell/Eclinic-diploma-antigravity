@@ -19,6 +19,8 @@ type NotificationRow = {
   readAt?: string | null;
 };
 
+const NOTIFICATION_REFRESH_MS = 15_000;
+
 export function NotificationBox({ variant = "list", buttonClassName }: { variant?: "list" | "dropdown"; buttonClassName?: string }) {
   const router = useRouter();
   const { user, role } = useAuthStore();
@@ -54,13 +56,22 @@ export function NotificationBox({ variant = "list", buttonClassName }: { variant
     }
 
     loadNotifications();
-    const refreshTimer = realtimeEnabled ? null : window.setInterval(loadNotifications, 90_000);
+    const refreshTimer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadNotifications();
+    }, realtimeEnabled ? NOTIFICATION_REFRESH_MS : 10_000);
+    function handleFocus() {
+      void loadNotifications();
+    }
     const channel = user?.id ? subscribeBroadcast<NotificationRow>(`user-notifications-${user.id}`, "new-notification", (notification) => {
       setNotifications((current) => [notification, ...current.filter((item) => item.id !== notification.id)]);
     }) : null;
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
     return () => {
       cancelled = true;
-      if (refreshTimer) window.clearInterval(refreshTimer);
+      window.clearInterval(refreshTimer);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
       removeRealtimeChannel(channel);
     };
   }, [user?.id, realtimeEnabled]);

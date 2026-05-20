@@ -71,6 +71,38 @@ export function removeRealtimeChannel(channel: RealtimeChannel | null) {
   if (client && channel) void client.removeChannel(channel);
 }
 
+export function trackUserPresence(userId: string, payload: Record<string, unknown> = {}) {
+  const client = getSupabaseBrowserClient();
+  if (!client) return null;
+  const channel = client.channel(`user-presence-${userId}`, {
+    config: { presence: { key: userId } },
+  });
+  channel.subscribe((status) => {
+    if (status === "SUBSCRIBED") {
+      void channel.track({ userId, onlineAt: new Date().toISOString(), ...payload });
+    }
+  });
+  return channel;
+}
+
+export function subscribeUserPresence(userId: string, onChange: (online: boolean) => void) {
+  const client = getSupabaseBrowserClient();
+  if (!client) return null;
+  const channel = client.channel(`user-presence-${userId}`, {
+    config: { presence: { key: userId } },
+  });
+  const emitState = () => {
+    const state = channel.presenceState();
+    onChange(Object.values(state).some((entries) => entries.length > 0));
+  };
+  channel
+    .on("presence", { event: "sync" }, emitState)
+    .on("presence", { event: "join" }, () => onChange(true))
+    .on("presence", { event: "leave" }, emitState)
+    .subscribe();
+  return channel;
+}
+
 function getBroadcastChannel(channelName: string) {
   const client = getSupabaseBrowserClient();
   if (!client) return null;

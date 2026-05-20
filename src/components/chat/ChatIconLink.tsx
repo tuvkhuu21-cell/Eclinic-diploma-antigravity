@@ -16,6 +16,8 @@ type NotificationRow = {
   readAt?: string | null;
 };
 
+const CHAT_BADGE_REFRESH_MS = 15_000;
+
 export function ChatIconLink({ className, iconSize = 19 }: { className?: string; iconSize?: number }) {
   const user = useAuthStore((state) => state.user);
   const [chatNotifications, setChatNotifications] = useState<NotificationRow[]>([]);
@@ -40,15 +42,24 @@ export function ChatIconLink({ className, iconSize = 19 }: { className?: string;
     }
 
     void loadUnreadChatNotifications();
-    const refreshTimer = realtimeEnabled ? null : window.setInterval(loadUnreadChatNotifications, 90_000);
+    const refreshTimer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadUnreadChatNotifications();
+    }, realtimeEnabled ? CHAT_BADGE_REFRESH_MS : 10_000);
+    function handleFocus() {
+      void loadUnreadChatNotifications();
+    }
     const channel = subscribeBroadcast<NotificationRow>(`user-notifications-${user.id}`, "new-notification", (notification) => {
       if (!isChatNotification(notification)) return;
       setChatNotifications((current) => [notification, ...current.filter((item) => item.id !== notification.id)]);
     });
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
 
     return () => {
       cancelled = true;
-      if (refreshTimer) window.clearInterval(refreshTimer);
+      window.clearInterval(refreshTimer);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
       removeRealtimeChannel(channel);
     };
   }, [user?.id, realtimeEnabled]);

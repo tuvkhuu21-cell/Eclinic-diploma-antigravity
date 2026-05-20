@@ -9,7 +9,7 @@ import { MessageBubble } from "./MessageBubble";
 import { DoctorOnlineStatus } from "./DoctorOnlineStatus";
 import { api } from "@/services/api";
 import { useAuthStore } from "@/store/auth.store";
-import { broadcastRealtime, isSupabaseRealtimeEnabled, removeRealtimeChannel, subscribeBroadcast } from "@/lib/supabase-realtime";
+import { broadcastRealtime, isSupabaseRealtimeEnabled, removeRealtimeChannel, subscribeBroadcast, subscribeUserPresence } from "@/lib/supabase-realtime";
 
 type ChatRoom = {
   id: string;
@@ -43,6 +43,7 @@ export function ChatBox() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [unreadRoomIds, setUnreadRoomIds] = useState<Set<string>>(new Set());
+  const [patientPresenceByUserId, setPatientPresenceByUserId] = useState<Record<string, boolean>>({});
   const [uploading, setUploading] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -175,6 +176,11 @@ export function ChatBox() {
   const activeOnlineAppointment = activeRoom?.appointment?.type === "ONLINE" || (activeRoom?.appointment && !activeRoom.appointment.type);
   const activeTitle = activeRoom ? (user?.role === "DOCTOR" ? `${activeRoom.patient.user.lastName || ""} ${activeRoom.patient.user.firstName}`.trim() : `${activeRoom.doctor.user.lastName || ""} ${activeRoom.doctor.user.firstName}`.trim()) : "Чат сонгоно уу";
   const activeInitials = getInitials(activeTitle);
+  const activeOtherOnline = Boolean(activeRoom && (
+    user?.role === "DOCTOR"
+      ? patientPresenceByUserId[activeRoom.patient.user.id || ""]
+      : activeRoom.doctor.online
+  ));
   const visibleRooms = useMemo(() => rooms.filter((room) => {
     const doctorName = `${room.doctor.user.lastName || ""} ${room.doctor.user.firstName}`.trim();
     const patientName = `${room.patient.user.lastName || ""} ${room.patient.user.firstName}`.trim();
@@ -183,6 +189,18 @@ export function ChatBox() {
     const matchesFilter = filter === "all" || unreadRoomIds.has(room.id);
     return matchesSearch && matchesFilter;
   }), [filter, rooms, searchTerm, unreadRoomIds, user?.role]);
+
+  useEffect(() => {
+    if (user?.role !== "DOCTOR" || !rooms.length) {
+      setPatientPresenceByUserId({});
+      return;
+    }
+    const patientUserIds = Array.from(new Set(rooms.map((room) => room.patient.user.id).filter(Boolean))) as string[];
+    const channels = patientUserIds.map((patientUserId) => subscribeUserPresence(patientUserId, (online) => {
+      setPatientPresenceByUserId((current) => ({ ...current, [patientUserId]: online }));
+    }));
+    return () => channels.forEach((channel) => removeRealtimeChannel(channel));
+  }, [rooms, user?.role]);
 
   function selectRoom(roomId: string) {
     setActiveRoomId(roomId);
@@ -341,7 +359,7 @@ export function ChatBox() {
                 <button key={room.id} type="button" className={`flex items-center gap-3 rounded-2xl p-3 text-left transition ${activeRoomId === room.id ? "bg-cyanSoft" : "hover:bg-emerald-50"}`} onClick={() => selectRoom(room.id)}>
                   <div className="relative grid h-14 w-14 shrink-0 place-items-center rounded-full bg-gradient-to-br from-emerald-100 to-cyanSoft text-lg font-black text-medical">
                     {getInitials(title)}
-                    <span className="absolute bottom-0 right-0 h-4 w-4 rounded-full border-2 border-white bg-emerald-500" />
+                    <span className={`absolute bottom-0 right-0 h-4 w-4 rounded-full border-2 border-white ${user?.role === "DOCTOR" ? (patientPresenceByUserId[room.patient.user.id || ""] ? "bg-emerald-500" : "bg-slate-300") : room.doctor.online ? "bg-emerald-500" : "bg-slate-300"}`} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-base font-extrabold text-slate-950">{title}</p>
@@ -360,13 +378,13 @@ export function ChatBox() {
             <div className="flex items-center gap-3">
               <div className="relative grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br from-emerald-100 to-cyanSoft text-base font-black text-medical">
                 {activeInitials}
-                {activeRoom && <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500" />}
+                {activeRoom && <span className={`absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white ${activeOtherOnline ? "bg-emerald-500" : "bg-slate-300"}`} />}
               </div>
               <div>
                 <h2 className="text-lg font-extrabold text-slate-950">{activeTitle}</h2>
                 <div className="mt-0.5 flex items-center gap-2 text-sm font-semibold text-slate-500">
-                  <span>{activeRoom ? "Active now" : "Чат сонгоно уу"}</span>
-                  {activeRoom && <DoctorOnlineStatus online={activeRoom?.doctor.online} />}
+                  <span>{activeRoom ? (activeOtherOnline ? "Active now" : "Offline") : "Чат сонгоно уу"}</span>
+                  {activeRoom && user?.role !== "DOCTOR" && <DoctorOnlineStatus online={activeRoom?.doctor.online} />}
                 </div>
               </div>
             </div>
