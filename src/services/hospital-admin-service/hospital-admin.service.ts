@@ -53,6 +53,24 @@ export const hospitalAdminService = {
             patient: { select: { user: { select: { firstName: true, lastName: true, email: true, phone: true } } } },
           },
         },
+        healthPackages: {
+          orderBy: { createdAt: "desc" },
+          take: 80,
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            summary: true,
+            oldPrice: true,
+            price: true,
+            discount: true,
+            icon: true,
+            labHours: true,
+            tests: true,
+            active: true,
+            createdAt: true,
+          },
+        },
       },
     });
     if (!hospital) throw new ApiError(404, "Hospital account not found");
@@ -97,6 +115,7 @@ export const hospitalAdminService = {
         labResults: hospital.labResults.length,
         revenue: paidAppointments.reduce((sum, item) => sum + (item.price > 0 ? item.price : 30000), 0),
       },
+      healthPackages: hospital.healthPackages.map(formatHealthPackage),
       doctors: hospital.doctors.map((doctor) => ({
         id: doctor.id,
         name: `${doctor.user.lastName || ""} ${doctor.user.firstName}`.trim(),
@@ -164,4 +183,87 @@ export const hospitalAdminService = {
       },
     });
   },
+
+  async createHealthPackage(userId: string, input: HealthPackageInput) {
+    const hospital = await prisma.hospital.findUnique({ where: { ownerId: userId }, select: { id: true } });
+    if (!hospital) throw new ApiError(404, "Hospital account not found");
+    const created = await prisma.healthPackage.create({
+      data: {
+        hospitalId: hospital.id,
+        name: input.name,
+        description: input.description,
+        summary: input.summary || input.description,
+        oldPrice: input.oldPrice || null,
+        price: input.price,
+        discount: input.discount || null,
+        icon: input.icon || "flask",
+        labHours: input.labHours || "08:30 - 17:00 (Даваа-Баасан)",
+        tests: input.tests,
+        active: input.active ?? true,
+      },
+    });
+    return formatHealthPackage(created);
+  },
+
+  async updateHealthPackage(userId: string, packageId: string, input: Partial<HealthPackageInput>) {
+    const hospital = await prisma.hospital.findUnique({ where: { ownerId: userId }, select: { id: true } });
+    if (!hospital) throw new ApiError(404, "Hospital account not found");
+    const existing = await prisma.healthPackage.findFirst({ where: { id: packageId, hospitalId: hospital.id }, select: { id: true } });
+    if (!existing) throw new ApiError(404, "Health package not found");
+    const updated = await prisma.healthPackage.update({
+      where: { id: packageId },
+      data: {
+        name: input.name,
+        description: input.description,
+        summary: input.summary,
+        oldPrice: input.oldPrice === undefined ? undefined : input.oldPrice || null,
+        price: input.price,
+        discount: input.discount === undefined ? undefined : input.discount || null,
+        icon: input.icon,
+        labHours: input.labHours,
+        tests: input.tests,
+        active: input.active,
+      },
+    });
+    return formatHealthPackage(updated);
+  },
 };
+
+type HealthPackageInput = {
+  name: string;
+  description: string;
+  summary?: string;
+  oldPrice?: number;
+  price: number;
+  discount?: string;
+  icon?: string;
+  labHours?: string;
+  tests: Array<{ title: string; tests: string[]; importance: string }>;
+  active?: boolean;
+};
+
+function formatHealthPackage(item: {
+  id: string;
+  name: string;
+  description: string;
+  summary?: string | null;
+  oldPrice?: number | null;
+  price: number;
+  discount?: string | null;
+  icon?: string | null;
+  labHours?: string | null;
+  tests: unknown;
+  active?: boolean;
+  createdAt?: Date;
+}) {
+  return {
+    ...item,
+    oldPrice: item.oldPrice || 0,
+    discount: item.discount || "",
+    icon: item.icon || "flask",
+    labHours: item.labHours || "08:30 - 17:00 (Даваа-Баасан)",
+    summary: item.summary || item.description,
+    tests: Array.isArray(item.tests) ? item.tests : [],
+    createdAt: item.createdAt?.toISOString?.() || item.createdAt,
+  };
+}

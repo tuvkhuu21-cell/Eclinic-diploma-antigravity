@@ -142,10 +142,34 @@ model Hospital {
   doctors     DoctorProfile[]
   appointments Appointment[]
   labResults  LabResult[]
+  healthPackages HealthPackage[]
 
   @@index([ownerId])
   @@index([district])
   @@index([createdAt])
+}
+
+model HealthPackage {
+  id          String   @id @default(cuid())
+  hospitalId  String
+  name        String
+  description String
+  summary     String?
+  oldPrice    Int?
+  price       Int
+  discount    String?
+  icon        String   @default("flask")
+  labHours    String?
+  tests       Json
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  hospital    Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  @@index([hospitalId])
+  @@index([active])
+  @@index([createdAt])
+  @@index([price])
 }
 
 model Department {

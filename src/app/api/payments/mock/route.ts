@@ -46,8 +46,8 @@ export async function POST(request: NextRequest) {
     const specialty = asString(body.specialty);
     const room = asString(body.room);
     const packageId = asString(body.packageId);
-    const packageName = asString(body.packageName) || "Урьдчилан сэргийлэх багц";
-    const labName = asString(body.labName) || hospitalName || "Лаборатори";
+    let packageName = asString(body.packageName) || "Урьдчилан сэргийлэх багц";
+    let labName = asString(body.labName) || hospitalName || "Лаборатори";
     const paymentStatus = asString(body.paymentStatus) || "PAID";
     const requestedPrice = asPositiveNumber(body.price);
 
@@ -60,13 +60,19 @@ export async function POST(request: NextRequest) {
     const patient = await prisma.patientProfile.findUnique({ where: { userId: user.userId } });
     if (!patient) throw new ApiError(403, "Patient profile required");
 
+    const packageInfo = isPackageOrder ? await resolvePackageInfo(packageId) : null;
+    if (packageInfo) {
+      packageName = packageInfo.name;
+      labName = packageInfo.hospital.name;
+    }
+
     const doctor = isPackageOrder
-      ? await resolvePackageOrderDoctor({ packageId, packageName, labName })
+      ? await resolvePackageOrderDoctor({ packageId })
       : await resolveDoctorForPayment({ doctorId, hospitalId, hospitalName, specialty });
     if (!doctor) throw new ApiError(404, "Doctor not found");
     validateDoctorAvailability({ doctor, scheduledDate, type, isPackageOrder });
 
-    const price = requestedPrice || (doctor.fee > 0 ? doctor.fee : DEFAULT_ONLINE_PRICE);
+    const price = requestedPrice || packageInfo?.price || (doctor.fee > 0 ? doctor.fee : DEFAULT_ONLINE_PRICE);
     const isHospitalVisit = type === "HOSPITAL_VISIT";
     const reason = isPackageOrder
       ? `Багц шинжилгээ - ${packageName} - ${labName}${packageId ? ` - ${packageId}` : ""}`
@@ -79,7 +85,7 @@ export async function POST(request: NextRequest) {
         id: appointmentId,
         patientId: patient.id,
         doctorId: doctor.id,
-        hospitalId: doctor.hospitalId || (hospitalId.startsWith("seed-") ? hospitalId : undefined),
+          hospitalId: packageInfo?.hospitalId || doctor.hospitalId || (hospitalId.startsWith("seed-") ? hospitalId : undefined),
         scheduledAt: scheduledDate,
         durationMinutes: 30,
         type,
@@ -244,59 +250,25 @@ function validateDoctorAvailability({ doctor, scheduledDate, type, isPackageOrde
   if (!allowedDays.includes(scheduledDate.getDay())) throw new ApiError(400, "Doctor is not available on the selected day");
 }
 
-async function resolvePackageOrderDoctor({ packageId, packageName, labName }: { packageId: string; packageName: string; labName: string }) {
-  const safeLabId = `package-lab-${slugify(labName)}`;
-  const email = `package.${slugify(labName)}@mediconnect.demo`;
-  const hospital = await prisma.hospital.upsert({
-    where: { id: safeLabId },
-    update: { name: labName, type: "Лаборатори" },
-    create: {
-      id: safeLabId,
-      name: labName,
-      type: "Лаборатори",
-      district: "Сүхбаатар",
-      address: `Улаанбаатар хот, ${labName}`,
-      latitude: 47.9186,
-      longitude: 106.9176,
-      rating: 4.7,
-      description: `${packageName}${packageId ? ` (${packageId})` : ""} багц шинжилгээний лаборатори.`,
-    },
+async function resolvePackageInfo(packageId: string) {
+  if (!packageId) throw new ApiError(400, "packageId is required");
+  const item = await prisma.healthPackage.findFirst({
+    where: { id: packageId, active: true },
+    select: { id: true, name: true, price: true, hospitalId: true, hospital: { select: { name: true } } },
   });
-  const user = await prisma.user.upsert({
-    where: { email },
-    update: { firstName: "Багц", lastName: "Шинжилгээ", phone: "7511-0011" },
-    create: {
-      email,
-      passwordHash: "package-order-no-login",
-      firstName: "Багц",
-      lastName: "Шинжилгээ",
-      phone: "7511-0011",
-      role: "DOCTOR",
-    },
-  });
-  return prisma.doctorProfile.upsert({
-    where: { userId: user.id },
-    update: {
-      hospitalId: hospital.id,
-      specialty: "Багц шинжилгээ",
-      experience: 1,
-      fee: DEFAULT_ONLINE_PRICE,
-      verified: true,
-      online: false,
-    },
-    create: {
-      userId: user.id,
-      hospitalId: hospital.id,
-      specialty: "Багц шинжилгээ",
-      experience: 1,
-      fee: DEFAULT_ONLINE_PRICE,
-      rating: 4.8,
-      verified: true,
-      online: false,
-      bio: `${labName}-ийн багц шинжилгээний захиалга хүлээн авах профайл.`,
-    },
+  if (!item) throw new ApiError(404, "Package not found");
+  return item;
+}
+
+async function resolvePackageOrderDoctor({ packageId }: { packageId: string }) {
+  const packageInfo = await resolvePackageInfo(packageId);
+  const doctor = await prisma.doctorProfile.findFirst({
+    where: { hospitalId: packageInfo.hospitalId },
+    orderBy: [{ verified: "desc" }, { id: "asc" }],
     include: { user: true },
   });
+  if (!doctor) throw new ApiError(400, "This hospital must register at least one doctor before receiving package orders");
+  return doctor;
 }
 
 function slugify(value: string) {

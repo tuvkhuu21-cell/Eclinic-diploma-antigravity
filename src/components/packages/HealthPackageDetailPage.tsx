@@ -6,24 +6,34 @@ import { Building2, ChevronDown, FlaskConical, MapPin, Phone, ShoppingCart } fro
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { useCartStore } from "@/store/cart.store";
-import { healthPackages, priceNumber } from "./packageData";
+import { DbHealthPackage, formatCurrency, packagePaymentUrl } from "./HealthPackagePage";
 
 export function HealthPackageDetailPage({ packageId }: { packageId: string }) {
   const router = useRouter();
-  const item = healthPackages.find((current) => current.id === packageId) || healthPackages[0];
+  const [item, setItem] = useState<DbHealthPackage | null>(null);
+  const [loading, setLoading] = useState(true);
   const { hydrate, addItem, hasItem } = useCartStore();
   const [openIndex, setOpenIndex] = useState<number | null>(0);
   const [showAll, setShowAll] = useState(false);
-  const inCart = hasItem(item.id);
-  const visibleTests = showAll ? item.tests : item.tests.slice(0, 5);
+  const inCart = item ? hasItem(item.id) : false;
+  const visibleTests = item ? (showAll ? item.tests : item.tests.slice(0, 5)) : [];
 
   useEffect(() => {
     hydrate();
-  }, [hydrate]);
+    fetch(`/api/health-packages/${packageId}`)
+      .then((response) => response.json())
+      .then((response) => setItem(response.data as DbHealthPackage))
+      .catch(() => setItem(null))
+      .finally(() => setLoading(false));
+  }, [hydrate, packageId]);
 
   function addToCart() {
-    addItem({ id: item.id, name: item.name, price: item.price, description: item.description });
+    if (!item) return;
+    addItem({ id: item.id, name: item.name, price: `${formatCurrency(item.price)}₮`, description: item.description });
   }
+
+  if (loading) return <section className="bg-slate-50 px-4 py-8"><div className="mx-auto max-w-7xl rounded-2xl border border-sky-100 bg-white p-6 text-sm font-bold text-slate-500 shadow-soft">Багц ачаалж байна...</div></section>;
+  if (!item) return <section className="bg-slate-50 px-4 py-8"><div className="mx-auto max-w-7xl rounded-2xl border border-dashed border-sky-100 bg-white p-10 text-center text-lg font-bold text-navy shadow-soft">Багц шинжилгээ олдсонгүй.</div></section>;
 
   return (
     <section className="bg-slate-50 px-4 py-8">
@@ -36,9 +46,9 @@ export function HealthPackageDetailPage({ packageId }: { packageId: string }) {
                 <h1 className="text-3xl font-bold text-navy">{item.name}</h1>
                 <p className="mt-2 text-slate-600">{item.description}</p>
                 <div className="mt-5 flex flex-wrap items-end gap-3">
-                  <span className="text-sm text-slate-400 line-through">{item.oldPrice}</span>
-                  <span className="rounded-full bg-rose-50 px-2 py-1 text-xs font-bold text-rose-600">{item.discount}</span>
-                  <span className="text-2xl font-bold text-medical">{item.price}</span>
+                  {item.oldPrice > 0 && <span className="text-sm text-slate-400 line-through">{formatCurrency(item.oldPrice)}₮</span>}
+                  {item.discount && <span className="rounded-full bg-rose-50 px-2 py-1 text-xs font-bold text-rose-600">{item.discount}</span>}
+                  <span className="text-2xl font-bold text-medical">{formatCurrency(item.price)}₮</span>
                 </div>
                 <div className="mt-6 flex flex-wrap gap-3">
                   <Button onClick={() => router.push(packagePaymentUrl(item))}>Захиалах</Button>
@@ -61,7 +71,7 @@ export function HealthPackageDetailPage({ packageId }: { packageId: string }) {
             {visibleTests.map((test, index) => {
               const isOpen = openIndex === index;
               return (
-                <article key={test.title} className="overflow-hidden rounded-xl border border-sky-100">
+                <article key={`${test.title}-${index}`} className="overflow-hidden rounded-xl border border-sky-100">
                   <button type="button" className="flex w-full items-center justify-between px-4 py-4 text-left font-bold text-navy hover:bg-cyanSoft" onClick={() => setOpenIndex(isOpen ? null : index)}>
                     {test.title}
                     <ChevronDown size={18} className={cn("text-medical transition", isOpen && "rotate-180")} />
@@ -86,30 +96,18 @@ export function HealthPackageDetailPage({ packageId }: { packageId: string }) {
   );
 }
 
-function LabInfoCard({ item }: { item: typeof healthPackages[number] }) {
+function LabInfoCard({ item }: { item: DbHealthPackage }) {
   return (
     <aside className="lg:sticky lg:top-24 lg:self-start">
       <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-soft">
         <h2 className="text-xl font-bold text-navy">Шинжилгээ өгөх лаборатори</h2>
         <div className="mt-5 grid gap-4 text-sm text-slate-600">
-          <p className="flex gap-3"><Building2 className="shrink-0 text-medical" size={18} /><span><b>Лаборатори:</b> {item.lab.name}</span></p>
-          <p><b>Цаг:</b> {item.lab.hours}</p>
-          <p className="flex gap-3"><MapPin className="shrink-0 text-medical" size={18} /><span><b>Хаяг:</b> {item.lab.address}</span></p>
-          <p className="flex gap-3"><Phone className="shrink-0 text-medical" size={18} /><span><b>Утас:</b> {item.lab.phone}</span></p>
+          <p className="flex gap-3"><Building2 className="shrink-0 text-medical" size={18} /><span><b>Лаборатори:</b> {item.hospital.name}</span></p>
+          <p><b>Цаг:</b> {item.labHours}</p>
+          <p className="flex gap-3"><MapPin className="shrink-0 text-medical" size={18} /><span><b>Хаяг:</b> {item.hospital.address}</span></p>
+          <p className="flex gap-3"><Phone className="shrink-0 text-medical" size={18} /><span><b>Утас:</b> {item.hospital.phone || "Утас бүртгээгүй"}</span></p>
         </div>
       </div>
     </aside>
   );
-}
-
-function packagePaymentUrl(item: typeof healthPackages[number]) {
-  const params = new URLSearchParams({
-    type: "PACKAGE_ORDER",
-    packageId: item.id,
-    packageName: item.name,
-    labName: item.lab.name,
-    price: String(priceNumber(item.price)),
-    scheduledAt: new Date().toISOString(),
-  });
-  return `/patient/home/appointment/payment?${params.toString()}`;
 }
