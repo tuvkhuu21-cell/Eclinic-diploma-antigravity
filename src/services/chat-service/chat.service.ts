@@ -29,37 +29,54 @@ export const chatService = {
             hospital: { select: { id: true, name: true } },
           },
         },
-        messages: { take: 1, orderBy: { createdAt: "desc" }, select: { id: true, content: true, senderId: true, createdAt: true } },
       },
       orderBy: { createdAt: "desc" },
       take: 50,
     });
     if (!rooms.length) return [];
-    const appointments = await prisma.appointment.findMany({
-      where: {
-        type: "ONLINE",
-        status: { in: ["CONFIRMED", "COMPLETED"] },
-        OR: rooms.map((room) => ({ patientId: room.patientId, doctorId: room.doctorId })),
-      },
-      select: {
-        id: true,
-        patientId: true,
-        doctorId: true,
-        type: true,
-        scheduledAt: true,
-        durationMinutes: true,
-        status: true,
-        paymentStatus: true,
-        videoCall: { select: { roomId: true, status: true } },
-      },
-      orderBy: { scheduledAt: "desc" },
-      take: 100,
-    });
+    const roomIds = rooms.map((room) => room.id);
+    const [latestMessages, appointments] = await Promise.all([
+      prisma.message.findMany({
+        where: { roomId: { in: roomIds } },
+        select: { id: true, roomId: true, content: true, senderId: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+        take: Math.max(roomIds.length * 2, 20),
+      }),
+      prisma.appointment.findMany({
+        where: {
+          type: "ONLINE",
+          status: { in: ["CONFIRMED", "COMPLETED"] },
+          ...(patientId
+            ? { patientId, doctorId: { in: rooms.map((room) => room.doctorId) } }
+            : doctorId
+              ? { doctorId, patientId: { in: rooms.map((room) => room.patientId) } }
+              : {}),
+        },
+        select: {
+          id: true,
+          patientId: true,
+          doctorId: true,
+          type: true,
+          scheduledAt: true,
+          durationMinutes: true,
+          status: true,
+          paymentStatus: true,
+          videoCall: { select: { roomId: true, status: true } },
+        },
+        orderBy: { scheduledAt: "desc" },
+        take: 100,
+      }),
+    ]);
+    const latestMessageByRoom = new Map<string, (typeof latestMessages)[number]>();
+    for (const message of latestMessages) {
+      if (!latestMessageByRoom.has(message.roomId)) latestMessageByRoom.set(message.roomId, message);
+    }
     const appointmentByPair = new Map(appointments.map((appointment) => [`${appointment.patientId}:${appointment.doctorId}`, appointment]));
     return rooms.map((room) => {
       const appointment = appointmentByPair.get(`${room.patientId}:${room.doctorId}`);
       return {
         ...room,
+        messages: latestMessageByRoom.has(room.id) ? [latestMessageByRoom.get(room.id)] : [],
         appointment: appointment ? {
           id: appointment.id,
           type: appointment.type,
@@ -123,11 +140,14 @@ export const chatService = {
 };
 
 async function getParticipantProfileIds(userId: string) {
-  const [patient, doctor] = await Promise.all([
-    prisma.patientProfile.findUnique({ where: { userId }, select: { id: true } }),
-    prisma.doctorProfile.findUnique({ where: { userId }, select: { id: true } }),
-  ]);
-  return { patientId: patient?.id, doctorId: doctor?.id };
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      patientProfile: { select: { id: true } },
+      doctorProfile: { select: { id: true } },
+    },
+  });
+  return { patientId: user?.patientProfile?.id, doctorId: user?.doctorProfile?.id };
 }
 
 async function createChatNotification(recipientUserId: string) {

@@ -117,6 +117,8 @@ model DoctorProfile {
   videoCalls    VideoCall[]
 
   @@index([hospitalId])
+  @@index([hospitalId, supportsInPerson])
+  @@index([hospitalId, supportsOnline])
   @@index([specialty])
   @@index([online])
 }
@@ -141,6 +143,8 @@ model Hospital {
   labResults  LabResult[]
 
   @@index([ownerId])
+  @@index([district])
+  @@index([createdAt])
 }
 
 model Department {

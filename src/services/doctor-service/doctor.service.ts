@@ -8,6 +8,11 @@ import type { doctorProfileUpdateSchema, doctorRegisterSchema } from "./doctor.s
 
 type DoctorRegisterInput = z.infer<typeof doctorRegisterSchema>;
 type DoctorProfileUpdateInput = z.infer<typeof doctorProfileUpdateSchema>;
+type DoctorListQuery = { q?: string | null; specialty?: string | null; hospitalId?: string | null; visit?: string | null; limit?: string | null };
+type CachedDoctors = Awaited<ReturnType<typeof listDoctorsUncached>>;
+
+const doctorListCache = new Map<string, { expiresAt: number; value: CachedDoctors }>();
+const DOCTOR_LIST_CACHE_MS = 20_000;
 
 function authPayload(user: { id: string; email: string; role: "PATIENT" | "DOCTOR" | "HOSPITAL" | "ADMIN"; firstName: string; lastName?: string | null }) {
   const token = signJwt({ userId: user.id, role: user.role });
@@ -26,34 +31,24 @@ async function findHospitalId(name?: string, id?: string) {
 }
 
 export const doctorService = {
-  list: (query: { q?: string | null; specialty?: string | null; hospitalId?: string | null; visit?: string | null; limit?: string | null }) =>
-    prisma.doctorProfile.findMany({
-      where: {
-        hospitalId: query.hospitalId || undefined,
-        specialty: query.specialty ? { contains: query.specialty, mode: "insensitive" } : undefined,
-        supportsInPerson: query.visit === "inPerson" ? true : undefined,
-        supportsOnline: query.visit === "online" ? true : undefined,
-        user: query.q ? { OR: [{ firstName: { contains: query.q, mode: "insensitive" } }, { lastName: { contains: query.q, mode: "insensitive" } }] } : undefined,
-      },
-      select: {
-        id: true,
-        specialty: true,
-        bio: true,
-        experience: true,
-        fee: true,
-        rating: true,
-        gender: true,
-        online: true,
-        supportsOnline: true,
-        supportsInPerson: true,
-        verified: true,
-        user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
-        hospital: { select: { id: true, name: true, address: true, phone: true } },
-        _count: { select: { appointments: true } },
-      },
-      orderBy: { user: { createdAt: "desc" } },
-      take: Math.min(Math.max(Number(query.limit) || 50, 1), 60),
-    }),
+  async list(query: DoctorListQuery) {
+    const cacheKey = JSON.stringify({
+      q: query.q?.trim().toLowerCase() || "",
+      specialty: query.specialty?.trim().toLowerCase() || "",
+      hospitalId: query.hospitalId || "",
+      visit: query.visit || "",
+      limit: query.limit || "",
+    });
+    const cached = doctorListCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    const value = await listDoctorsUncached(query);
+    doctorListCache.set(cacheKey, { expiresAt: Date.now() + DOCTOR_LIST_CACHE_MS, value });
+    if (doctorListCache.size > 80) {
+      const oldestKey = doctorListCache.keys().next().value;
+      if (oldestKey) doctorListCache.delete(oldestKey);
+    }
+    return value;
+  },
   detail: (id: string) => prisma.doctorProfile.findUnique({
     where: { id },
     select: {
@@ -165,3 +160,31 @@ export const doctorService = {
     });
   },
 };
+
+function listDoctorsUncached(query: DoctorListQuery) {
+  return prisma.doctorProfile.findMany({
+    where: {
+      hospitalId: query.hospitalId || undefined,
+      specialty: query.specialty ? { contains: query.specialty, mode: "insensitive" } : undefined,
+      supportsInPerson: query.visit === "inPerson" ? true : undefined,
+      supportsOnline: query.visit === "online" ? true : undefined,
+      user: query.q ? { OR: [{ firstName: { contains: query.q, mode: "insensitive" } }, { lastName: { contains: query.q, mode: "insensitive" } }] } : undefined,
+    },
+    select: {
+      id: true,
+      specialty: true,
+      bio: true,
+      experience: true,
+      fee: true,
+      rating: true,
+      gender: true,
+      online: true,
+      supportsOnline: true,
+      supportsInPerson: true,
+      verified: true,
+      user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
+      hospital: { select: { id: true, name: true, address: true, phone: true } },
+    },
+    take: Math.min(Math.max(Number(query.limit) || 40, 1), 60),
+  });
+}
