@@ -170,6 +170,9 @@ model Appointment {
   @@index([status])
   @@index([scheduledAt])
   @@index([patientId, doctorId])
+  @@index([patientId, scheduledAt])
+  @@index([doctorId, scheduledAt])
+  @@index([doctorId, status, scheduledAt])
 }
 
 model Consultation {
@@ -212,6 +215,7 @@ model ChatRoom {
   @@index([patientId])
   @@index([doctorId])
   @@index([patientId, doctorId])
+  @@index([patientId, doctorId, createdAt])
 }
 
 model Message {
@@ -240,6 +244,7 @@ model Notification {
 
   @@index([userId])
   @@index([userId, readAt])
+  @@index([userId, createdAt])
 }
 
 model VideoCall {
@@ -260,6 +265,7 @@ model VideoCall {
   @@index([doctorId])
   @@index([status])
   @@index([doctorId, status])
+  @@index([status, startedAt])
 }
 
 model AiConversation {
