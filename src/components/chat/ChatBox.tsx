@@ -2,9 +2,7 @@
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Edit3, MoreHorizontal, Paperclip, Search, Send, Smile, Video } from "lucide-react";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Paperclip, Search, Send, Smile, Video } from "lucide-react";
 import { MessageBubble } from "./MessageBubble";
 import { DoctorOnlineStatus } from "./DoctorOnlineStatus";
 import { api } from "@/services/api";
@@ -334,10 +332,6 @@ export function ChatBox() {
           <div className="border-b border-emerald-100 p-5">
             <div className="flex items-center justify-between">
               <h1 className="text-3xl font-black tracking-tight text-slate-950">Chats</h1>
-              <div className="flex gap-2">
-                <button type="button" className="grid h-11 w-11 place-items-center rounded-full bg-cyanSoft text-medical transition hover:bg-emerald-100" aria-label="More"><MoreHorizontal size={22} /></button>
-                <button type="button" className="grid h-11 w-11 place-items-center rounded-full bg-cyanSoft text-medical transition hover:bg-emerald-100" aria-label="New chat"><Edit3 size={21} /></button>
-              </div>
             </div>
             <label className="mt-5 flex h-12 items-center gap-3 rounded-full bg-[#f0f8f4] px-4 text-slate-500 ring-1 ring-emerald-100">
               <Search size={22} />

@@ -32,9 +32,6 @@ export function MessageBubble({ mine, text, status }: { mine?: boolean; text: st
               <p className="text-base font-semibold text-slate-500">{formatCallSubtitle(payload)}</p>
             </div>
           </div>
-          <button type="button" className="mt-3 h-12 w-full rounded-xl bg-slate-200 text-lg font-semibold text-slate-950 transition hover:bg-slate-300">
-            Call again
-          </button>
         </div>
       </div>
     );
