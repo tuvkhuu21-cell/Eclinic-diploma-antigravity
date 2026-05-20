@@ -16,6 +16,9 @@ export type DoctorDetail = {
   fee: number;
   rating: number;
   online?: boolean;
+  supportsOnline?: boolean;
+  supportsInPerson?: boolean;
+  availableDays?: number[];
   verified?: boolean;
   hospital?: { name: string } | null;
   user: { firstName: string; lastName?: string };

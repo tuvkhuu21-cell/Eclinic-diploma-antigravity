@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
       ? await resolvePackageOrderDoctor({ packageId, packageName, labName })
       : await resolveDoctorForPayment({ doctorId, hospitalId, hospitalName, specialty });
     if (!doctor) throw new ApiError(404, "Doctor not found");
+    validateDoctorAvailability({ doctor, scheduledDate, type, isPackageOrder });
 
     const price = requestedPrice || (doctor.fee > 0 ? doctor.fee : DEFAULT_ONLINE_PRICE);
     const isHospitalVisit = type === "HOSPITAL_VISIT";
@@ -224,6 +225,23 @@ async function resolveDoctorForPayment({ doctorId, hospitalId, hospitalName, spe
     },
     include: { user: true },
   });
+}
+
+function validateDoctorAvailability({ doctor, scheduledDate, type, isPackageOrder }: { doctor: { supportsOnline: boolean; supportsInPerson: boolean; availableDays?: number[] }; scheduledDate: Date; type: string; isPackageOrder: boolean }) {
+  if (isPackageOrder) return;
+  const isHospitalVisit = type === "HOSPITAL_VISIT";
+  if (!isHospitalVisit && !doctor.supportsOnline) throw new ApiError(400, "Doctor does not accept online appointments");
+  if (isHospitalVisit && !doctor.supportsInPerson) throw new ApiError(400, "Doctor does not accept in-person appointments");
+  if (isHospitalVisit) return;
+
+  const now = new Date();
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const maxDate = new Date(today);
+  maxDate.setDate(today.getDate() + 7);
+  if (scheduledDate < now || scheduledDate >= maxDate) throw new ApiError(400, "Online appointments are available for the next 7 days only");
+  const allowedDays = doctor.availableDays?.length ? doctor.availableDays : [1, 2, 3, 4, 5];
+  if (!allowedDays.includes(scheduledDate.getDay())) throw new ApiError(400, "Doctor is not available on the selected day");
 }
 
 async function resolvePackageOrderDoctor({ packageId, packageName, labName }: { packageId: string; packageName: string; labName: string }) {

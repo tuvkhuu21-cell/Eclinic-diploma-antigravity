@@ -17,6 +17,7 @@ type DoctorProfileResponse = {
   online: boolean;
   supportsOnline?: boolean;
   supportsInPerson?: boolean;
+  availableDays?: number[];
   hospital?: { name: string } | null;
   user: {
     email: string;
@@ -27,6 +28,16 @@ type DoctorProfileResponse = {
 };
 
 type AlertState = { type: "success" | "error"; text: string };
+const weekDays = [
+  { value: 1, label: "Даваа" },
+  { value: 2, label: "Мягмар" },
+  { value: 3, label: "Лхагва" },
+  { value: 4, label: "Пүрэв" },
+  { value: 5, label: "Баасан" },
+  { value: 6, label: "Бямба" },
+  { value: 0, label: "Ням" },
+];
+const defaultAvailableDays = [1, 2, 3, 4, 5];
 
 export function DoctorProfileForm() {
   const [form, setForm] = useState({
@@ -43,6 +54,7 @@ export function DoctorProfileForm() {
     online: false,
     supportsOnline: true,
     supportsInPerson: false,
+    availableDays: defaultAvailableDays,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -68,6 +80,7 @@ export function DoctorProfileForm() {
           online: profile.online,
           supportsOnline: profile.supportsOnline ?? profile.online,
           supportsInPerson: profile.supportsInPerson ?? false,
+          availableDays: profile.availableDays?.length ? profile.availableDays : defaultAvailableDays,
         });
       })
       .catch(() => setAlert({ type: "error", text: "Профайл ачаалж чадсангүй" }))
@@ -94,6 +107,15 @@ export function DoctorProfileForm() {
 
   function patch(key: keyof typeof form, value: string | boolean) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function toggleAvailableDay(day: number) {
+    setForm((current) => {
+      const days = current.availableDays.includes(day)
+        ? current.availableDays.filter((value) => value !== day)
+        : [...current.availableDays, day].sort((a, b) => a - b);
+      return { ...current, availableDays: days.length ? days : current.availableDays };
+    });
   }
 
   async function toggleOnlineStatus() {
@@ -164,6 +186,22 @@ export function DoctorProfileForm() {
           <input type="checkbox" className="h-4 w-4 accent-medical" checked={form.supportsInPerson} onChange={(event) => patch("supportsInPerson", event.target.checked)} disabled={saving} />
           Үйлчилгээний төрөл: Биечлэн
         </label>
+        <div className="md:col-span-2 rounded-lg border border-slate-200 p-4">
+          <p className="text-sm font-bold text-navy">Онлайн цаг захиалга авах гараг</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {weekDays.map((day) => (
+              <button
+                key={day.value}
+                type="button"
+                className={`rounded-lg border px-3 py-2 text-sm font-bold transition ${form.availableDays.includes(day.value) ? "border-medical bg-cyanSoft text-medical" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                onClick={() => toggleAvailableDay(day.value)}
+                disabled={saving}
+              >
+                {day.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <textarea className="min-h-28 rounded-lg border border-slate-200 px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-medical focus:ring-4 focus:ring-sky-100 md:col-span-2" placeholder="Танилцуулга" value={form.bio} onChange={(event) => patch("bio", event.target.value)} disabled={saving} />
         <Button className="md:col-span-2" disabled={saving}>{saving ? "Хадгалж байна..." : "Хадгалах"}</Button>
       </form>

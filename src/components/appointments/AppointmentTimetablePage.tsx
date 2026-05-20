@@ -38,8 +38,6 @@ export function AppointmentTimetablePage() {
   const [doctor, setDoctor] = useState<DoctorDetail | null>(null);
   const [mounted, setMounted] = useState(false);
   const [doctorId, setDoctorId] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
   const [selectedDay, setSelectedDay] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
   const [warning, setWarning] = useState("");
@@ -47,8 +45,6 @@ export function AppointmentTimetablePage() {
   useEffect(() => {
     setDoctorId(new URLSearchParams(window.location.search).get("service") || "");
     const today = toInputDate(new Date());
-    setStartDate(today);
-    setEndDate(today);
     setSelectedDay(today);
     setMounted(true);
   }, []);
@@ -58,14 +54,15 @@ export function AppointmentTimetablePage() {
     api.get(`/doctors/${doctorId}`).then((response) => setDoctor(response.data.data as DoctorDetail)).catch(() => setDoctor(null));
   }, [doctorId]);
 
-  const daySlots = useMemo(() => (startDate && endDate ? generateAvailability(startDate, endDate) : []), [endDate, startDate]);
+  const availableDays = doctor?.availableDays?.length ? doctor.availableDays : [1, 2, 3, 4, 5];
+  const daySlots = useMemo(() => generateAvailability(availableDays), [availableDays]);
 
   useEffect(() => {
     if (!daySlots.some((day) => day.date === selectedDay)) {
-      setSelectedDay(daySlots[0]?.date || startDate);
+      setSelectedDay(daySlots[0]?.date || toInputDate(new Date()));
       setSelectedTime("");
     }
-  }, [daySlots, selectedDay, startDate]);
+  }, [daySlots, selectedDay]);
 
   function continueToConfirmation() {
     if (!selectedTime) {
@@ -95,16 +92,8 @@ export function AppointmentTimetablePage() {
           <aside className="rounded-2xl border border-sky-100 bg-white p-6 shadow-soft">
             {doctor ? <DoctorSummary doctor={doctor} /> : <p className="text-sm text-slate-500">Эмчийн мэдээлэл ачаалж байна...</p>}
             <div className="mt-6 grid gap-4">
-              <label className="text-sm font-bold text-navy">
-                Эхлэх огноо
-                <input type="date" className="mt-2 h-11 w-full rounded-lg border border-sky-100 px-3 text-sm outline-none focus:border-medical" value={startDate} onChange={(event) => { const next = event.target.value; setStartDate(next); if (endDate < next) setEndDate(next); setSelectedTime(""); }} />
-              </label>
-              <label className="text-sm font-bold text-navy">
-                Дуусах огноо
-                <input type="date" className="mt-2 h-11 w-full rounded-lg border border-sky-100 px-3 text-sm outline-none focus:border-medical" value={endDate} min={startDate} onChange={(event) => { setEndDate(event.target.value); setSelectedTime(""); }} />
-              </label>
               <div className="rounded-xl bg-cyanSoft p-4 text-sm font-bold text-medical">
-                {startDate} → {endDate}
+                Эмчийн сонгосон гарагаар ойрын 7 хоногийн боломжит цаг харагдана.
               </div>
             </div>
           </aside>
@@ -140,21 +129,22 @@ export function AppointmentTimetablePage() {
   );
 }
 
-function generateAvailability(startDate: string, endDate: string): DaySlots[] {
-  const start = new Date(`${startDate}T00:00:00`);
-  const end = new Date(`${endDate}T00:00:00`);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return [];
-
+function generateAvailability(availableDays: number[]): DaySlots[] {
+  const allowed = new Set(availableDays.length ? availableDays : [1, 2, 3, 4, 5]);
   const days: DaySlots[] = [];
-  const cursor = new Date(start);
-  while (cursor <= end) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  for (let index = 0; index < 7; index += 1) {
+    const cursor = new Date(today);
+    cursor.setDate(today.getDate() + index);
+    if (!allowed.has(cursor.getDay())) continue;
     const slots: DaySlots["slots"] = [];
     const slot = new Date(cursor);
     slot.setHours(9, 0, 0, 0);
-    const today = new Date();
-    const isToday = toInputDate(cursor) === toInputDate(today);
+    const now = new Date();
+    const isToday = toInputDate(cursor) === toInputDate(now);
     if (isToday) {
-      slot.setTime(Math.max(slot.getTime(), today.getTime() + 5 * 60 * 1000));
+      slot.setTime(Math.max(slot.getTime(), now.getTime() + 5 * 60 * 1000));
       slot.setSeconds(0, 0);
     }
     const last = new Date(cursor);
@@ -168,7 +158,6 @@ function generateAvailability(startDate: string, endDate: string): DaySlots[] {
       label: formatMongolianDate(cursor),
       slots,
     });
-    cursor.setDate(cursor.getDate() + 1);
   }
   return days;
 }

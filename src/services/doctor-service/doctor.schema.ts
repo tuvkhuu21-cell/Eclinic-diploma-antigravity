@@ -18,6 +18,7 @@ export const doctorRegisterSchema = z.object({
   bio: z.string().optional(),
   supportsOnline: z.boolean().optional(),
   supportsInPerson: z.boolean().optional(),
+  availableDays: z.array(z.coerce.number().int().min(0).max(6)).optional(),
 }).refine((value) => value.password === value.confirmPassword, {
   message: "Passwords do not match",
   path: ["confirmPassword"],
@@ -37,4 +38,5 @@ export const doctorProfileUpdateSchema = z.object({
   online: z.boolean().optional(),
   supportsOnline: z.boolean().optional(),
   supportsInPerson: z.boolean().optional(),
+  availableDays: z.array(z.coerce.number().int().min(0).max(6)).optional(),
 });

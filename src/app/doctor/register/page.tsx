@@ -13,6 +13,15 @@ import { AuthUser, useAuthStore } from "@/store/auth.store";
 
 type AlertState = { type: "success" | "error"; text: string };
 type HospitalOption = { id: string; name: string; type: string; district: string };
+const weekDays = [
+  { value: 1, label: "Даваа" },
+  { value: 2, label: "Мягмар" },
+  { value: 3, label: "Лхагва" },
+  { value: 4, label: "Пүрэв" },
+  { value: 5, label: "Баасан" },
+  { value: 6, label: "Бямба" },
+  { value: 0, label: "Ням" },
+];
 
 function getAuthPayload(responseData: unknown): { token: string; user: AuthUser } {
   const data = responseData as { data?: { token?: string; user?: AuthUser }; token?: string; user?: AuthUser };
@@ -40,6 +49,7 @@ export default function DoctorRegisterPage() {
     bio: "",
     supportsOnline: "true",
     supportsInPerson: "false",
+    availableDays: [1, 2, 3, 4, 5],
   });
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState<AlertState | null>(null);
@@ -66,6 +76,7 @@ export default function DoctorRegisterPage() {
         fee: Number(form.fee),
         supportsOnline: form.supportsOnline === "true",
         supportsInPerson: form.supportsInPerson === "true",
+        availableDays: form.availableDays,
       });
       const { token, user } = getAuthPayload(response.data);
       setAuth(token, user);
@@ -84,6 +95,15 @@ export default function DoctorRegisterPage() {
 
   function patch(key: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function toggleAvailableDay(day: number) {
+    setForm((current) => {
+      const days = current.availableDays.includes(day)
+        ? current.availableDays.filter((value) => value !== day)
+        : [...current.availableDays, day].sort((a, b) => a - b);
+      return { ...current, availableDays: days.length ? days : current.availableDays };
+    });
   }
 
   return (
@@ -128,6 +148,22 @@ export default function DoctorRegisterPage() {
             <input type="checkbox" className="h-4 w-4 accent-medical" checked={form.supportsInPerson === "true"} onChange={(event) => patch("supportsInPerson", event.target.checked ? "true" : "false")} disabled={loading} />
             Биечлэн үзлэг авна
           </label>
+          <div className="rounded-lg border border-slate-200 p-4 md:col-span-2">
+            <p className="text-sm font-bold text-navy">Онлайн цаг захиалга авах гараг</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {weekDays.map((day) => (
+                <button
+                  key={day.value}
+                  type="button"
+                  className={`rounded-lg border px-3 py-2 text-sm font-bold transition ${form.availableDays.includes(day.value) ? "border-medical bg-cyanSoft text-medical" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                  onClick={() => toggleAvailableDay(day.value)}
+                  disabled={loading}
+                >
+                  {day.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <textarea className="min-h-28 rounded-lg border border-slate-200 px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-medical focus:ring-4 focus:ring-sky-100 md:col-span-2" placeholder="Товч танилцуулга" value={form.bio} onChange={(event) => patch("bio", event.target.value)} disabled={loading} />
           <Button className="md:col-span-2" disabled={loading}>{loading ? "Бүртгэж байна..." : "Бүртгүүлэх"}</Button>
         </form>

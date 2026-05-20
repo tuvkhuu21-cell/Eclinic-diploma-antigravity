@@ -107,6 +107,7 @@ model DoctorProfile {
   online        Boolean        @default(false)
   supportsOnline Boolean       @default(true)
   supportsInPerson Boolean     @default(false)
+  availableDays Int[]          @default([1, 2, 3, 4, 5])
   verified      Boolean        @default(false)
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   hospital      Hospital?      @relation(fields: [hospitalId], references: [id])

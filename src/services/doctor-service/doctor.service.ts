@@ -13,6 +13,7 @@ type CachedDoctors = Awaited<ReturnType<typeof listDoctorsUncached>>;
 
 const doctorListCache = new Map<string, { expiresAt: number; value: CachedDoctors }>();
 const DOCTOR_LIST_CACHE_MS = 20_000;
+const DEFAULT_AVAILABLE_DAYS = [1, 2, 3, 4, 5];
 
 function authPayload(user: { id: string; email: string; role: "PATIENT" | "DOCTOR" | "HOSPITAL" | "ADMIN"; firstName: string; lastName?: string | null }) {
   const token = signJwt({ userId: user.id, role: user.role });
@@ -62,6 +63,7 @@ export const doctorService = {
       online: true,
       supportsOnline: true,
       supportsInPerson: true,
+      availableDays: true,
       verified: true,
       user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
       hospital: { select: { id: true, name: true, address: true, phone: true } },
@@ -93,6 +95,7 @@ export const doctorService = {
             online: input.supportsOnline ?? true,
             supportsOnline: input.supportsOnline ?? true,
             supportsInPerson: input.supportsInPerson ?? false,
+            availableDays: sanitizeAvailableDays(input.availableDays),
             verified: false,
           },
         },
@@ -113,6 +116,7 @@ export const doctorService = {
       online: true,
       supportsOnline: true,
       supportsInPerson: true,
+      availableDays: true,
       verified: true,
       user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
       hospital: { select: { id: true, name: true, address: true, phone: true } },
@@ -142,8 +146,9 @@ export const doctorService = {
           fee: input.fee,
           bio: input.bio,
           online: input.online,
-          supportsOnline: input.supportsOnline ?? input.online ?? undefined,
+          supportsOnline: input.supportsOnline,
           supportsInPerson: input.supportsInPerson,
+          availableDays: input.availableDays !== undefined ? sanitizeAvailableDays(input.availableDays) : undefined,
           hospitalId: input.hospitalId !== undefined || input.hospital !== undefined ? hospitalId : undefined,
         },
         include: { user: true, hospital: true },
@@ -181,10 +186,16 @@ function listDoctorsUncached(query: DoctorListQuery) {
       online: true,
       supportsOnline: true,
       supportsInPerson: true,
+      availableDays: true,
       verified: true,
       user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
       hospital: { select: { id: true, name: true, address: true, phone: true } },
     },
     take: Math.min(Math.max(Number(query.limit) || 40, 1), 60),
   });
+}
+
+function sanitizeAvailableDays(days?: number[]) {
+  if (!days?.length) return DEFAULT_AVAILABLE_DAYS;
+  return Array.from(new Set(days.map((day) => Number(day)).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))).sort((a, b) => a - b);
 }
