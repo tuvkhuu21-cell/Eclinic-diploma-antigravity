@@ -7,6 +7,10 @@ import { doctorService } from "@/services/doctor-service/doctor.service";
 export const runtime = "nodejs";
 export const OPTIONS = options;
 
+const publicCache = {
+  "Cache-Control": "public, max-age=20, s-maxage=60, stale-while-revalidate=120",
+};
+
 export async function GET(request: NextRequest) {
   try {
     const startedAt = Date.now();
@@ -18,7 +22,7 @@ export async function GET(request: NextRequest) {
       limit: request.nextUrl.searchParams.get("limit"),
     });
     if (Date.now() - startedAt > 600) console.info("GET /api/doctors slow", { ms: Date.now() - startedAt, count: rows.length });
-    return ok(rows);
+    return ok(rows, "success", { headers: publicCache });
   } catch (error) {
     if (error instanceof ApiError) return fail(error.message, error.statusCode);
     console.error("GET /api/doctors failed", error);

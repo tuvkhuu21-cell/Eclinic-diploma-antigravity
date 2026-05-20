@@ -71,53 +71,54 @@ export async function POST(request: NextRequest) {
       ? `Багц шинжилгээ - ${packageName} - ${labName}${packageId ? ` - ${packageId}` : ""}`
       : isHospitalVisit ? `Биечлэн үзүүлэх${hospitalName ? ` - ${hospitalName}` : ""}${specialty ? ` - ${specialty}` : ""}${room ? ` - Өрөө ${room}` : ""}` : "Онлайн зөвлөгөө";
 
-    const result = await prisma.$transaction(async (tx) => {
-      const appointmentId = randomUUID();
-      const status = paymentStatus === "PAID" ? "CONFIRMED" : "PENDING";
-      const appointment = await tx.appointment.create({
-        data: {
-          id: appointmentId,
-          patientId: patient.id,
-          doctorId: doctor.id,
-          hospitalId: doctor.hospitalId || (hospitalId.startsWith("seed-") ? hospitalId : undefined),
-          scheduledAt: scheduledDate,
-          durationMinutes: 30,
-          type,
-          price,
-          paymentStatus,
-          reason,
-          status,
-        },
-        include: { patient: { include: { user: true } }, doctor: { include: { user: true, hospital: true } }, hospital: true },
-      });
+    const appointmentId = randomUUID();
+    const status = paymentStatus === "PAID" ? "CONFIRMED" : "PENDING";
+    const appointment = await prisma.appointment.create({
+      data: {
+        id: appointmentId,
+        patientId: patient.id,
+        doctorId: doctor.id,
+        hospitalId: doctor.hospitalId || (hospitalId.startsWith("seed-") ? hospitalId : undefined),
+        scheduledAt: scheduledDate,
+        durationMinutes: 30,
+        type,
+        price,
+        paymentStatus,
+        reason,
+        status,
+      },
+      include: { patient: { include: { user: true } }, doctor: { include: { user: true, hospital: true } }, hospital: true },
+    });
 
-      const patientNotification = await tx.notification.create({
+    const [patientNotification, doctorNotification] = await Promise.all([
+      prisma.notification.create({
         data: {
           userId: user.userId,
           title: "Төлбөр төлөгдлөө",
           body: isPackageOrder ? "Багц шинжилгээний төлбөр төлөгдлөө." : "Төлбөр төлөгдлөө. Таны онлайн цаг баталгаажлаа.",
           type: "PAYMENT",
         },
-      });
-
-      const doctorNotification = isPackageOrder ? null : await tx.notification.create({
+      }),
+      isPackageOrder ? Promise.resolve(null) : prisma.notification.create({
         data: {
           userId: doctor.userId,
           title: isHospitalVisit ? "Шинэ эмнэлгийн цаг захиалга" : "Шинэ онлайн цаг захиалга",
           body: isHospitalVisit ? "Шинэ биечлэн үзүүлэх цаг захиалга ирлээ." : "Шинэ онлайн цаг захиалга ирлээ.",
           type: "APPOINTMENT",
         },
-      });
+      }),
+    ]);
 
-      const chatRoom = isHospitalVisit || isPackageOrder ? null : await tx.chatRoom.findFirst({
+    const [chatRoom, videoCall] = isHospitalVisit || isPackageOrder ? [null, null] : await Promise.all([
+      prisma.chatRoom.findFirst({
         where: { patientId: patient.id, doctorId: doctor.id },
         select: { id: true },
-      }) || await tx.chatRoom.create({
+      }).then((room) => room || prisma.chatRoom.create({
         data: { patientId: patient.id, doctorId: doctor.id },
         select: { id: true },
-      });
-      const videoCall = isHospitalVisit || isPackageOrder ? null : await tx.videoCall.upsert({
-        where: { appointmentId: appointmentId },
+      })),
+      prisma.videoCall.upsert({
+        where: { appointmentId },
         update: { status: "waiting" },
         create: {
           appointmentId,
@@ -126,13 +127,13 @@ export async function POST(request: NextRequest) {
           roomId: `video-${appointmentId}`,
           status: "waiting",
         },
-      });
+      }),
+    ]);
 
-      return {
-        appointment: { ...appointment, chatRoom, videoCall },
-        notifications: { patient: patientNotification, doctor: doctorNotification },
-      };
-    });
+    const result = {
+      appointment: { ...appointment, chatRoom, videoCall },
+      notifications: { patient: patientNotification, doctor: doctorNotification },
+    };
 
     void broadcastRealtimeServer(`user-notifications-${user.userId}`, "new-notification", result.notifications.patient).catch(() => null);
     if (result.notifications.doctor) {
