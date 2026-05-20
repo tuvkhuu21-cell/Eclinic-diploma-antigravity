@@ -8,6 +8,12 @@ type GroqResponse = {
   }>;
 };
 
+const DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile";
+const DEPRECATED_GROQ_MODELS = new Set([
+  "deepseek-r1-distill-llama-70b",
+  "deepseek-r1-distill-llama-70b-specdec",
+]);
+
 export const aiService = {
   tools: (role: string) => allowedToolsForRole(role),
   async ask(userId: string | null, role: string, data: { message: string; tool?: string }) {
@@ -69,7 +75,7 @@ async function buildHealthcareContext() {
 async function askGroq(message: string, role: string, context: Awaited<ReturnType<typeof buildHealthcareContext>>) {
   const apiKey = process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
   if (!apiKey) return fallbackAnswer(message, context);
-  const model = process.env.GROQ_MODEL || "llama-3.1-8b-instant";
+  const model = getGroqModel();
   const system = [
     "Чи MediConnect-ийн Монгол хэлтэй healthcare AI туслах.",
     "Монгол хэлээр товч, ойлгомжтой, аюулгүй зөвлөгөө өг.",
@@ -101,6 +107,12 @@ async function askGroq(message: string, role: string, context: Awaited<ReturnTyp
   const data = await response.json() as GroqResponse;
   const text = data.choices?.[0]?.message?.content?.trim();
   return text || fallbackAnswer(message, context);
+}
+
+function getGroqModel() {
+  const rawModel = process.env.GROQ_MODEL?.trim().replace(/^["']|["']$/g, "");
+  if (!rawModel || DEPRECATED_GROQ_MODELS.has(rawModel)) return DEFAULT_GROQ_MODEL;
+  return rawModel;
 }
 
 function fallbackAnswer(message: string, context: Awaited<ReturnType<typeof buildHealthcareContext>>) {

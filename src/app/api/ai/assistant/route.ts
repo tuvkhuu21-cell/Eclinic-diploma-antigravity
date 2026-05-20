@@ -8,6 +8,10 @@ export const runtime = "nodejs";
 const DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile";
 const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL_PATTERN = /^[a-zA-Z0-9._:-]+$/;
+const DEPRECATED_GROQ_MODELS = new Set([
+  "deepseek-r1-distill-llama-70b",
+  "deepseek-r1-distill-llama-70b-specdec",
+]);
 
 const requestSchema = z.object({
   message: z.string().trim().min(1, "message is required").max(2000),
@@ -25,6 +29,7 @@ type GroqResponse = {
 function getGroqModel() {
   const rawModel = process.env.GROQ_MODEL?.trim().replace(/^["']|["']$/g, "");
   if (!rawModel || !GROQ_MODEL_PATTERN.test(rawModel)) return DEFAULT_GROQ_MODEL;
+  if (DEPRECATED_GROQ_MODELS.has(rawModel)) return DEFAULT_GROQ_MODEL;
   return rawModel;
 }
 
